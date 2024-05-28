@@ -32,6 +32,6 @@ runLexer :: (Pos p) => Lexer errorType stateType resultType
          -- ^ function to be applied to resulting error when lexing fails
          -> a
 runLexer lexer initState initPos text label f e =
-  case evalState (runParserT lexer label (dropText initPos text)) initState of
+  case evalState (runParserT lexer label text) initState of
     Left err -> e err
     Right lexemes -> f lexemes

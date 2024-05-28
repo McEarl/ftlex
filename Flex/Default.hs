@@ -13,17 +13,12 @@ module Flex.Default (
 ) where
 
 import Flex.Lexer
-import Flex.CatCode
-import Flex.Message
-import Flex.Position
-import Text.Megaparsec.Pos (SourcePos(..), mkPos, unPos)
+import Text.Megaparsec.Pos (SourcePos(..), mkPos)
 import Text.Megaparsec.Pos qualified as Megaparsec
 import Data.Text.Lazy (Text)
-import Data.Text.Lazy qualified as Text
 import Data.Char qualified as Char
 import Data.Map qualified as Map
 import Data.List qualified as List
-import Basement.IntegralConv (intToInt64)
 
 
 -- * Default Command Line Lexer
@@ -46,19 +41,20 @@ defaultCatCodes = Map.fromAscList
   [(c, initCatCode c) | c <- ['\NUL' .. '\DEL']]
   where
     initCatCode :: Char -> CatCode
-    initCatCode ' ' = Space
-    initCatCode '\CR' = LineBreak
+    initCatCode ' ' = SpaceCat
+    initCatCode '\n' = LineBreakCat
     initCatCode c
-      | Char.isAsciiUpper c = AlphaNumChar
-      | Char.isAsciiLower c = AlphaNumChar
-      | Char.isDigit c = AlphaNumChar
+      | Char.isAsciiUpper c = AlphaNumCat
+      | Char.isAsciiLower c = AlphaNumCat
+      | Char.isDigit c = AlphaNumCat
     initCatCode c
-      | '\x21' <= c && c <= '\x2f' = Symbol
-      | '\x3a' <= c && c <= '\x40' = Symbol
-      | '\x5b' <= c && c <= '\x60' = Symbol
-      | '\x7b' <= c && c <= '\x7e' = Symbol
-    initCatCode '#' = CommentPrefix
-    initCatCode _ = InvalidChar
+      | '\x21' <= c && c <= '\x22' = SymbolCat -- ! "
+      | '\x24' <= c && c <= '\x2f' = SymbolCat -- $ % & ' ( ) * + , - . /
+      | '\x3a' <= c && c <= '\x40' = SymbolCat -- : ; < = > ? @
+      | '\x5b' <= c && c <= '\x60' = SymbolCat -- [ \ ] ^ _ `
+      | '\x7b' <= c && c <= '\x7e' = SymbolCat -- { | } ~
+    initCatCode '#' = CommentPrefixCat
+    initCatCode _ = InvalidCat
 
 
 -- * Default Modifiers 
@@ -89,13 +85,6 @@ instance Pos DefaultPos where
 
   getStringPos :: String -> DefaultPos -> DefaultPos
   getStringPos _ pos = pos
-
-  dropText :: DefaultPos -> Text -> Text
-  dropText pos =
-    Text.drop ((intToInt64. unPos . sourceColumn . fromDefPos $ pos) - 1) .
-    Text.unlines .
-    List.drop ((unPos . sourceLine . fromDefPos $ pos) - 1) .
-    Text.lines
 
 defaultInitPos :: FilePath -> DefaultPos
 defaultInitPos fileName = DefaultPos $ SourcePos fileName (mkPos 1) (mkPos 1)

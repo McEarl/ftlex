@@ -5,7 +5,14 @@
 
 module Flex.Lexer (
   runFtlLexer,
-  Lexeme,
+  Lexeme(..),
+
+  CatCode(..),
+  CatCodeMap,
+
+  Pos(..),
+
+  Msg(..)
 ) where
 
 import Data.Text.Lazy (Text)
@@ -19,7 +26,7 @@ import Flex.Position
 import Flex.Error
 import Flex.Message
 import Flex.Base
-import Flex.CatCode hiding (CatCode(..))
+import Flex.CatCode
 
 
 -- * Lexemes
@@ -31,7 +38,7 @@ data (Pos p) => Lexeme p =
     -- ^ An alpha-numeric string
   | Space p
     -- ^ A sequence of (horizontal and vertical) white space characters
-  | Comment p
+  | Comment String p
     -- ^ A comment
   | EOF p
     -- ^ End of file
@@ -44,15 +51,15 @@ data (Pos p) => LexingError p =
     InvalidChar !Char p
   deriving (Eq, Ord)
 
--- | Turn an error into a located error message.
+-- | Turn an error into a located error 
 makeErrMsg :: (Pos p) => LexingError p -> LocatedMsg p
 makeErrMsg (InvalidChar char pos) =
-  let msg = "Invalid character '" ++ [char] ++ "' " ++
+  let msg = "Invalid character " ++ show [char] ++ " " ++
             "(U+" ++ codePoint char ++ ")."
   in (msg, pos)
   where
     codePoint c = let hex = showHex (ord c) "" in
-      replicate (min (4 - length hex) 0) '0' ++ hex
+      replicate (max (4 - length hex) 0) '0' ++ hex
       -- justifyRight 4 '0' $ showHex (Char.ord c) ""
 
 
@@ -134,7 +141,7 @@ comment = do
   put state{
       position = newPos
     }
-  return $ Comment commentPosition
+  return $ Comment comment commentPosition
 
 -- | White space: Longest possible string of ASCII space characters.
 space :: (Pos p) => FtlLexer (Lexeme p) p
