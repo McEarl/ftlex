@@ -1,4 +1,4 @@
-name: Flex
+name: flex
 version: 0.0.1
 cabal-version: >= 1.10
 build-type: Simple
@@ -6,6 +6,7 @@ license: LGPL-3
 license-file: LICENSE
 copyright: (c) 2024 Marcel Schütz
 author: Marcel Schütz
+maintainer: marcel.schuetz@fau.de
 stability: experimental
 homepage: https://github.com/McEarl/FLex
 bug-reports: https://github.com/McEarl/FLex/issues
@@ -36,18 +37,17 @@ library
     Flex.Message
     Flex.Position
   build-depends:
-    base >= 4.19.1.0,
-    basement >= 0.0.16,
-    containers >= 0.6.8,
-    megaparsec >= 9.6.1,
-    mtl >= 2.3.1,
-    text >= 2.1.1,
-    transformers >= 0.6.1.0
+    base == 4.19.1.0,
+    basement == 0.0.16,
+    containers == 0.6.8,
+    megaparsec == 9.6.1,
+    mtl == 2.3.1,
+    text == 2.1.1,
+    transformers == 0.6.1.0
 --  hs-source-dirs:
   default-extensions:
     ImportQualifiedPost
   ghc-options:
-    -O2
     -Wall
     -fno-warn-unused-do-bind
     -fno-warn-unused-matches
