@@ -12,7 +12,6 @@ import Data.Text.Lazy (Text)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.List.NonEmpty as NonEmpty
-
 import Flex.Message
 import Flex.Position
 

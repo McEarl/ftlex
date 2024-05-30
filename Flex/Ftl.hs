@@ -3,30 +3,108 @@
 --
 -- FTL Lexer
 
-module Flex.Lexer (
-  runFtlLexer,
-  Lexeme(..),
-
+module Flex.Ftl (
   CatCode(..),
   CatCodeMap,
-
-  Pos(..),
-
-  Msg(..)
+  defaultCatCodes,
+  runLexer,
+  Lexeme(..)
 ) where
 
 import Data.Text.Lazy (Text)
 import Control.Monad.State.Class (get, put, gets)
 import Control.Monad (void)
 import Text.Megaparsec hiding (Pos)
-import Data.Char (ord)
+import Data.Char qualified as Char
 import Numeric (showHex)
-
+import Data.Map.Strict qualified as Map
+import Data.Maybe (isNothing)
 import Flex.Position
 import Flex.Error
 import Flex.Message
-import Flex.Base
-import Flex.CatCode
+import Flex.Base qualified as Base
+
+
+-- * Category Codes
+
+data CatCode =
+    SpaceCat
+  | LineBreakCat
+  | AlphaNumCat
+  | SymbolCat
+  | CommentPrefixCat
+  | InvalidCat
+  deriving Eq
+
+type CatCodeMap = Map.Map Char CatCode
+
+-- | Checks whether a character is a space wrt. a given category code mapping
+-- (default: @ @).
+isSpace :: CatCodeMap -> Char -> Bool
+isSpace catCodeMap c =
+  Map.lookup c catCodeMap == Just SpaceCat
+
+-- | Checks whether a character is a line break character wrt. a given category 
+-- code mapping (default: @\\CR@).
+isLineBreak :: CatCodeMap -> Char -> Bool
+isLineBreak catCodeMap c =
+  Map.lookup c catCodeMap == Just LineBreakCat
+
+-- | Checks whether a character is an alpha-numeric character wrt. a given 
+-- category code mapping (default: any ASCII letter or ASCII digit).
+isAlphanumChar :: CatCodeMap -> Char -> Bool
+isAlphanumChar catCodeMap c =
+  Map.lookup c catCodeMap == Just AlphaNumCat
+
+-- | Checks whether a character is a symbol wrt. a given category code mapping
+-- (default: any ASCII character that is neither a control character, nor a
+-- letter, nor a digit, nor a space, nor @#@).
+isSymbol :: CatCodeMap -> Char -> Bool
+isSymbol catCodeMap c =
+  Map.lookup c catCodeMap == Just SymbolCat
+
+-- | Checks whether a character is a comment prefix character wrt. a given
+-- category code mapping (default: @%@).
+isCommentChar :: CatCodeMap -> Char -> Bool
+isCommentChar catCodeMap c =
+  Map.lookup c catCodeMap == Just CommentPrefixCat
+
+-- | Checks whether a character is invalid wrt. a given category code mapping
+-- (default: any non-ASCII character and any ASCII control character except
+-- @\\CR@).
+isInvalidChar :: CatCodeMap -> Char -> Bool
+isInvalidChar catCodeMap c =
+     Map.lookup c catCodeMap == Just InvalidCat
+  || isNothing (Map.lookup c catCodeMap)
+
+-- | Default category code mapping for FTL documents:
+--
+-- * The ASCII space character has category @SpaceCat@.
+-- * The carriage return has category @LineBreakCat@.
+-- * Alphanumeric ASCII characters have category @AlphaNumCat@.
+-- * ASCII symbols except @#@ have category @SymbolCat@.
+-- * @#@ has category @CommentPrefixCat@.
+-- * Any other ASCII characters has category @InvalidCat@.
+-- * Any other characters are not in that mapping.
+defaultCatCodes :: CatCodeMap
+defaultCatCodes = Map.fromAscList
+  [(c, initCatCode c) | c <- ['\NUL' .. '\DEL']]
+  where
+    initCatCode :: Char -> CatCode
+    initCatCode ' ' = SpaceCat
+    initCatCode '\n' = LineBreakCat
+    initCatCode c
+      | Char.isAsciiUpper c = AlphaNumCat
+      | Char.isAsciiLower c = AlphaNumCat
+      | Char.isDigit c = AlphaNumCat
+    initCatCode c
+      | '\x21' <= c && c <= '\x22' = SymbolCat -- ! "
+      | '\x24' <= c && c <= '\x2f' = SymbolCat -- $ % & ' ( ) * + , - . /
+      | '\x3a' <= c && c <= '\x40' = SymbolCat -- : ; < = > ? @
+      | '\x5b' <= c && c <= '\x60' = SymbolCat -- [ \ ] ^ _ `
+      | '\x7b' <= c && c <= '\x7e' = SymbolCat -- { | } ~
+    initCatCode '#' = CommentPrefixCat
+    initCatCode _ = InvalidCat
 
 
 -- * Lexemes
@@ -58,14 +136,14 @@ makeErrMsg (InvalidChar char pos) =
             "(U+" ++ codePoint char ++ ")."
   in (msg, pos)
   where
-    codePoint c = let hex = showHex (ord c) "" in
+    codePoint c = let hex = showHex (Char.ord c) "" in
       replicate (max (4 - length hex) 0) '0' ++ hex
       -- justifyRight 4 '0' $ showHex (Char.ord c) ""
 
 
 -- * Lexer Type
 
-type FtlLexer resultType p = Lexer (LexingError p) (LexingState p) resultType
+type FtlLexer resultType p = Base.Lexer (LexingError p) (LexingState p) resultType
 
 
 -- * Lexer State
@@ -88,15 +166,21 @@ initLexingState pos catCodes = LexingState{
 
 -- * Running a Lexer
 
-runFtlLexer :: (Msg p m) => p -> Text -> String -> CatCodeMap -> ([Lexeme p] -> m [Lexeme p]) -> m [Lexeme p]
-runFtlLexer initPos inputText inputTextLabel initCatCodes modifier = runLexer
-  ftlText
-  (initLexingState initPos initCatCodes)
-  initPos
-  inputText
-  inputTextLabel
-  modifier
-  (handleError makeErrMsg)
+runLexer :: (Msg p m)
+         => p                             -- ^ Initial position
+         -> Text                          -- ^ Input text
+         -> String                        -- ^ Label (e.g. file name)
+         -> CatCodeMap                    -- ^ Initial category codes
+         -> ([Lexeme p] -> m [Lexeme p])  -- ^ Lexeme modifier
+         -> m [Lexeme p]
+runLexer initPos inputText inputTextLabel initCatCodes modifier =
+  Base.runLexer
+    ftlText
+    (initLexingState initPos initCatCodes)
+    inputText
+    inputTextLabel
+    modifier
+    (handleError makeErrMsg)
 
 
 -- * Lexer Combinators

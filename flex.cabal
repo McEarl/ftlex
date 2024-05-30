@@ -1,5 +1,5 @@
 name: flex
-version: 0.0.3
+version: 0.0.4
 cabal-version: >= 1.10
 build-type: Simple
 license: LGPL-3
@@ -28,9 +28,7 @@ source-repository head
 
 library
   exposed-modules:
-    Flex.CatCode
-    Flex.Default
-    Flex.Lexer
+    Flex.Ftl
     Flex.Message
     Flex.Position
   other-modules:

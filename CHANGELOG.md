@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.0.4
+
+Revise module structure.
+
+
 ## v0.0.3
 
 * Expose `Flex.CatCode`, `Flex.Message` and `Flex.Position`.

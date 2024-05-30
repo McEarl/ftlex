@@ -7,12 +7,11 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Flex.Default (
-  runDefaultFtlLexer,
-  defaultCatCodes
+module Text.Flex.Default (
+  runLexer
 ) where
 
-import Flex.Lexer
+import Flex.Ftl qualified as Ftl
 import Text.Megaparsec.Pos (SourcePos(..), mkPos)
 import Text.Megaparsec.Pos qualified as Megaparsec
 import Data.Text.Lazy (Text)
@@ -23,47 +22,17 @@ import Data.List qualified as List
 
 -- * Default Command Line Lexer
 
-runDefaultFtlLexer :: (Monad m) => FilePath -> Text -> m [Lexeme DefaultPos]
-runDefaultFtlLexer fileName fileContent =
-  runFtlLexer
+runLexer :: (Monad m) => FilePath -> Text -> m [Lexeme DefaultPos]
+runLexer fileName fileContent =
+  Ftl.runLexer
     (defaultInitPos fileName)
     fileContent
     fileName
-    defaultCatCodes
-    defaultModifier
+    Ftl.defaultCatCodes
+    pure
 
 
--- * Default Category Codes
-
--- | Default category codes.
-defaultCatCodes :: CatCodeMap
-defaultCatCodes = Map.fromAscList
-  [(c, initCatCode c) | c <- ['\NUL' .. '\DEL']]
-  where
-    initCatCode :: Char -> CatCode
-    initCatCode ' ' = SpaceCat
-    initCatCode '\n' = LineBreakCat
-    initCatCode c
-      | Char.isAsciiUpper c = AlphaNumCat
-      | Char.isAsciiLower c = AlphaNumCat
-      | Char.isDigit c = AlphaNumCat
-    initCatCode c
-      | '\x21' <= c && c <= '\x22' = SymbolCat -- ! "
-      | '\x24' <= c && c <= '\x2f' = SymbolCat -- $ % & ' ( ) * + , - . /
-      | '\x3a' <= c && c <= '\x40' = SymbolCat -- : ; < = > ? @
-      | '\x5b' <= c && c <= '\x60' = SymbolCat -- [ \ ] ^ _ `
-      | '\x7b' <= c && c <= '\x7e' = SymbolCat -- { | } ~
-    initCatCode '#' = CommentPrefixCat
-    initCatCode _ = InvalidCat
-
-
--- * Default Modifiers 
-
-defaultModifier ::(Monad m) => [Lexeme p] -> m [Lexeme p]
-defaultModifier = pure
-
-
--- * Default Positions
+-- * Default Position Instance
 
 newtype DefaultPos = DefaultPos SourcePos deriving (Eq, Ord)
 
@@ -90,7 +59,7 @@ defaultInitPos :: FilePath -> DefaultPos
 defaultInitPos fileName = DefaultPos $ SourcePos fileName (mkPos 1) (mkPos 1)
 
 
--- * Default Message
+-- * Default Message Instance
 
 instance (Monad m) => Msg DefaultPos m where
   errorLexer :: DefaultPos -> String -> m a
