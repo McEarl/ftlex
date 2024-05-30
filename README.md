@@ -10,7 +10,7 @@ ForTheL parsing frameworks.
 
 ### Stack
 
-1.  Add `https://github.com/McEarl/FLex/releases/download/v0.0.2/flex-0.0.2.tar.gz`
+1.  Add `https://github.com/McEarl/FLex/releases/download/v0.0.4/flex-0.0.4.tar.gz`
     to `extra-deps` in your `stack.yaml`.
 
 2.  Add `flex` to `dependencies` in your `package.yaml`.
