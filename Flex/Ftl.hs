@@ -3,17 +3,21 @@
 --
 -- FTL Lexer
 
+{-# LANGUAGE OverloadedStrings #-}
+
 module Flex.Ftl (
   CatCode(..),
   CatCodeMap,
   defaultCatCodes,
   runLexer,
+  LexingState(..),
+  LineBreakType(..),
   Lexeme(..)
 ) where
 
 import Data.Text.Lazy (Text)
+import Data.Text.Lazy qualified as Text
 import Control.Monad.State.Class (get, put, gets)
-import Control.Monad (void)
 import Text.Megaparsec hiding (Pos)
 import Data.Char qualified as Char
 import Numeric (showHex)
@@ -23,6 +27,7 @@ import Flex.Position
 import Flex.Error
 import Flex.Message
 import Flex.Base qualified as Base
+import Flex.Helpers
 
 
 -- * Category Codes
@@ -84,7 +89,7 @@ defaultCatCodes = Map.fromAscList
   where
     initCatCode :: Char -> CatCode
     initCatCode ' ' = SpaceCat
-    initCatCode '\n' = LineBreakCat
+    initCatCode '\r' = LineBreakCat
     initCatCode c
       | Char.isAsciiUpper c = AlphaNumCat
       | Char.isAsciiLower c = AlphaNumCat
@@ -132,6 +137,32 @@ makeErrMsg (InvalidChar char pos) =
       -- justifyRight 4 '0' $ showHex (Char.ord c) ""
 
 
+-- * Splitting the Input Text
+
+-- | Supported types of line breaks.
+data LineBreakType =
+    CR    -- ^ Carriage return (@\\r@)
+  | LF    -- ^ Line feed (@\\n@)
+  | CRLF  -- ^ Carriage return + line feed (@\\r\\n@)
+
+-- | @splitText catCodeMap lineBreakType text@ splits a text @text@
+-- in
+-- 1. the content of its first line, without trailing spaces and the line break
+--    character(s) (where the former are determined by @catCodeMap@ and the
+--    latter by @lineBreakType@),
+-- 2. all trailing spaces and the line break character(s), and
+-- 3. the rest of the text.
+splitText :: CatCodeMap -> LineBreakType -> Text -> (Text, Text, Text)
+splitText catCodeMap lineBreakType text =
+  let lineBreak = case lineBreakType of
+        CR -> "\r"
+        LF -> "\n"
+        CRLF -> "\r\n"
+      (line, rest) = Text.breakOn lineBreak text
+      rest' = Text.drop (Text.length lineBreak) rest
+  in (line, lineBreak, rest')
+
+
 -- * Lexer Type
 
 type FtlLexer resultType p = Base.Lexer (LexingError p) (LexingState p) resultType
@@ -147,13 +178,6 @@ data (Pos p) => LexingState p = LexingState{
     -- ^ Current category codes
   }
 
--- | The initial lexing state.
-initLexingState :: (Pos p) => p -> CatCodeMap -> LexingState p
-initLexingState pos catCodes = LexingState{
-    position = pos,
-    catCodes = catCodes
-  }
-
 
 -- * Running a Lexer
 
@@ -161,23 +185,41 @@ runLexer :: (Msg p m)
          => p             -- ^ Initial position
          -> Text          -- ^ Input text
          -> String        -- ^ Label (e.g. file name)
-         -> CatCodeMap    -- ^ Initial category codes
+         -> LexingState p -- ^ Lexing state
+         -> LineBreakType -- ^ Line break type
          -> m [Lexeme p]
-runLexer initPos inputText inputTextLabel initCatCodes =
-  Base.runLexer
-    ftlText
-    (initLexingState initPos initCatCodes)
-    inputText
-    inputTextLabel
+runLexer pos text label state lineBreakType = do
+  -- Split the input text at the first linebreak:
+  let (line, lineBreak, rest) = splitText
+        (catCodes state)
+        lineBreakType
+        text
+  -- Lex the first line of the input text:
+  (lexemes, newState) <- Base.runLexer
+    ftlLine
+    state
+    line
+    ""
     (handleError makeErrMsg)
+  -- Repeat the procedure for the remainder of the input text and append an EOF
+  -- lexeme:
+  let newPos = (position newState)
+      lineBreakPos = getStringPos (Text.unpack lineBreak) newPos
+      newPos' = explodeString (Text.unpack lineBreak) newPos
+      lineBreakLexeme = Space lineBreakPos
+      newState' = newState{position = newPos'}
+  restLexemes <- if Text.null rest
+    then pure [EOF newPos']
+    else runLexer newPos' rest "" newState' lineBreakType
+  return $ lexemes ++ [lineBreakLexeme] ++ restLexemes
 
 
 -- * Lexer Combinators
 
 -- | A ForTheL text in the FTL dialect: Arbitrary many tokens, interspersed with
 -- optional white space, until the end of the input text is reached.
-ftlText :: (Pos p) => FtlLexer [Lexeme p] p
-ftlText = do
+ftlLine :: (Pos p) => FtlLexer ([Lexeme p], LexingState p) p
+ftlLine = do
   lexemes <- many $ choice [
       comment,
       space,
@@ -185,8 +227,9 @@ ftlText = do
       symbol,
       catchInvalidChar
     ]
-  eofLexeme <- endOfInput
-  return (lexemes ++ [eofLexeme])
+  eof
+  state <- get
+  return (lexemes, state)
 
 -- | A line comment: Starts with '#' and ends at the next line break.
 comment :: (Pos p) => FtlLexer (Lexeme p) p
@@ -197,24 +240,25 @@ comment = do
   prefix <- satisfy $ isCommentChar cats
   -- Consume as many characters as possible until either an invalid character,
   -- a vertical space or the end of input is reached:
-  commentBody <- many $ satisfy $ \c ->
-       isSpace cats c
-    || isAlphanumChar cats c
-    || isSymbol cats c
-    || isCommentChar cats c
+  commentBody <- many $ satisfy $ disjunction [
+      isSpace cats,
+      isAlphanumChar cats,
+      isSymbol cats,
+      isCommentChar cats
+    ]
   -- If an invalid character is reached, chatch it (at the position that has
   -- been reached during the execution of the last line):
   optional $ catchInvalidCharAt (explodeString (prefix : commentBody) pos)
-  -- If no invalid character is reached, expect a vertical space or the end of
-  -- input:
-  void (satisfy $ isLineBreak cats) <|> lookAhead eof
-  let comment = prefix : commentBody ++ "\n"
+  -- If no invalid character is reached, expect the end of input:
+  eof
+  let comment = prefix : commentBody
       newPos = explodeString comment pos
       commentPosition = getStringPos comment pos
   put state{
       position = newPos
     }
-  return $ Comment comment commentPosition
+  return $ Comment commentBody commentPosition
+
 
 -- | White space: Longest possible string of ASCII space characters.
 space :: (Pos p) => FtlLexer (Lexeme p) p
@@ -222,7 +266,7 @@ space = do
   state <- get
   let pos = position state
       cats = catCodes state
-  space <- some (satisfy $ \c -> isSpace cats c || isLineBreak cats c)
+  space <- some (satisfy $ disjunction [isSpace cats, isLineBreak cats])
   let newPos = explodeString space pos
       spacePos = getStringPos space pos
   put state{
@@ -275,10 +319,3 @@ catchInvalidChar :: (Pos p) => FtlLexer a p
 catchInvalidChar = do
   pos <- gets position
   catchInvalidCharAt pos
-
--- | The end of the input text.
-endOfInput :: (Pos p) => FtlLexer (Lexeme p) p
-endOfInput = do
-  currentPos <- gets position
-  eof
-  return $ EOF currentPos

@@ -1,5 +1,5 @@
 name: flex
-version: 0.0.5
+version: 0.1.0
 cabal-version: >= 1.10
 build-type: Simple
 license: LGPL-3
@@ -34,6 +34,7 @@ library
   other-modules:
     Flex.Base
     Flex.Error
+    Flex.Helpers
   build-depends:
     base >= 4.18.1.0 && <= 4.19.1.0,
     containers >= 0.6.7 && <= 0.6.8,

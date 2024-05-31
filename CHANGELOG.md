@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.0
+
+Change lexing style to TeX-like line-by-line lexing.
+
+
 ## v0.0.5
 
 Revise `runLexer` signatures.

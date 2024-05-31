@@ -1,0 +1,283 @@
+-- |
+-- Creator: Marcel Schütz (2024)
+--
+-- TeX Lexer
+
+module Flex.Tex (
+  CatCode(..),
+  CatCodeMap,
+  defaultCatCodes,
+  runLexer,
+  Lexeme(..)
+) where
+
+import Data.Text.Lazy (Text)
+import Control.Monad.State.Class (get, put, gets)
+import Control.Monad (void)
+import Text.Megaparsec hiding (Pos)
+import Text.Megaparsec.Char (string)
+import Data.Char qualified as Char
+import Numeric (showHex)
+import Data.Map.Strict qualified as Map
+import Data.Maybe (isNothing)
+import Flex.Position
+import Flex.Error
+import Flex.Message
+import Flex.Base qualified as Base
+
+
+-- * Category Codes
+
+data CatCode =
+    EscapeCharCat     -- ^ Escape character
+  | BeginGroupCat     -- ^ Begin group character
+  | EndGroupCat       -- ^ End group character
+  | MathShiftCat      -- ^ Math shift character
+  | AlignTabCat       -- ^ Alignment tab
+  | EndOfLineCat      -- ^ Line break
+  | ParamCharCat      -- ^ Parameter character
+  | SuperscriptCat    -- ^ Superscript character
+  | SubscriptCat      -- ^ Subscript character
+  | IgnoredCat        -- ^ Ignored character
+  | SpaceCat          -- ^ Horizontal space
+  | LetterCat         -- ^ Letter
+  | OtherCat          -- ^ Other character
+  | ActiveCat         -- ^ Active character
+  | CommentPrefixCat  -- ^ Comment Prefix
+  | InvalidCat        -- ^ Ignored character
+  deriving Eq
+
+type CatCodeMap = Map.Map Char CatCode
+
+-- | Checks whether a character is an escape character wrt. a given category
+-- code mapping (default: @\\@).
+isEscapeChar :: CatCodeMap -> Char -> Bool
+isEscapeChar catCodeMap c =
+  Map.lookup c catCodeMap == Just EscapeCharCat
+
+-- | Checks whether a character is a begin group character wrt. a given
+-- category code mapping (default: @{@).
+isBeginGroupChar :: CatCodeMap -> Char -> Bool
+isBeginGroupChar catCodeMap c =
+  Map.lookup c catCodeMap == Just BeginGroupCat
+
+-- | Checks whether a character is an end group character wrt. a given category
+-- code mapping (default: @}@).
+isEndGroupChar :: CatCodeMap -> Char -> Bool
+isEndGroupChar catCodeMap c =
+  Map.lookup c catCodeMap == Just EndGroupCat
+
+-- | Checks whether a character is a math shift character wrt. a given category
+-- code mapping (default: @$@).
+isMathShiftChar :: CatCodeMap -> Char -> Bool
+isMathShiftChar catCodeMap c =
+  Map.lookup c catCodeMap == Just MathShiftCat
+
+-- | Checks whether a character is an alignment tab wrt. a given category code
+-- mapping (default: @&@).
+isAlignTab :: CatCodeMap -> Char -> Bool
+isAlignTab catCodeMap c =
+  Map.lookup c catCodeMap == Just AlignTabCat
+
+-- | Checks whether a character is a line break character wrt. a given category
+-- code mapping (default: @\\r@).
+isEndOfLine :: CatCodeMap -> Char -> Bool
+isEndOfLine catCodeMap c =
+  Map.lookup c catCodeMap == Just EndOfLineCat
+
+-- | Checks whether a character is a parameter character wrt. a given category
+-- code mapping (default: @#@).
+isParamChar :: CatCodeMap -> Char -> Bool
+isParamChar catCodeMap c =
+  Map.lookup c catCodeMap == Just ParamCharCat
+
+-- | Checks whether a character is a superscript character wrt. a given
+-- category code mapping (default: @^@).
+isSuperscriptChar :: CatCodeMap -> Char -> Bool
+isSuperscriptChar catCodeMap c =
+  Map.lookup c catCodeMap == Just SuperscriptCat
+
+-- | Checks whether a character is a subscript character wrt. a given category
+-- code mapping (default: @_@).
+isSubscriptChar :: CatCodeMap -> Char -> Bool
+isSubscriptChar catCodeMap c =
+  Map.lookup c catCodeMap == Just SubscriptCat
+
+-- | Checks whether a character is an ignored character wrt. a given category
+-- code mapping (default: @\\NUL@).
+isIgnoredChar :: CatCodeMap -> Char -> Bool
+isIgnoredChar catCodeMap c =
+  Map.lookup c catCodeMap == Just IgnoredCat
+
+-- | Checks whether a character is a space wrt. a given category code mapping
+-- (default: @ @).
+isSpace :: CatCodeMap -> Char -> Bool
+isSpace catCodeMap c =
+  Map.lookup c catCodeMap == Just SpaceCat
+
+-- | Checks whether a character is a letter wrt. a given category code mapping
+-- (default: any ASCII letter).
+isLetter :: CatCodeMap -> Char -> Bool
+isLetter catCodeMap c =
+  Map.lookup c catCodeMap == Just LetterCat
+
+-- | Checks whether a character is an other character wrt. a given category
+-- code mapping (default: any ASCII characterthat is not part of any other
+-- character category).
+isOtherChar :: CatCodeMap -> Char -> Bool
+isOtherChar catCodeMap c =
+  Map.lookup c catCodeMap == Just OtherCat
+
+-- | Checks whether a character is an active character wrt. a given category
+-- code mapping (default: @~@).
+isActiveChar :: CatCodeMap -> Char -> Bool
+isActiveChar catCodeMap c =
+  Map.lookup c catCodeMap == Just ActiveCat
+
+-- | Checks whether a character is a comment prefix wrt. a given category code
+-- mapping (default: @%@).
+isCommentPrefix :: CatCodeMap -> Char -> Bool
+isCommentPrefix catCodeMap c =
+  Map.lookup c catCodeMap == Just CommentPrefixCat
+
+-- | Checks whether a character is an invalid character wrt. a given category
+-- code mapping (default: any non-ASCII character).
+isInvalidChar :: CatCodeMap -> Char -> Bool
+isInvalidChar catCodeMap c =
+     Map.lookup c catCodeMap == Just InvalidCat
+  || isNothing (Map.lookup c catCodeMap)
+
+-- | Default category code mapping for TeX documents.
+defaultCatCodes :: CatCodeMap
+defaultCatCodes = Map.fromAscList [(c, initCatCode c) | c <- ['\NUL' .. '\DEL']]
+  where
+    initCatCode :: Char -> CatCode
+    initCatCode '\\' = EscapeCharCat
+    initCatCode '{' = BeginGroupCat
+    initCatCode '}' = EndGroupCat
+    initCatCode '$' = MathShiftCat
+    initCatCode '&' = AlignTabCat
+    initCatCode '\r' = EndOfLineCat
+    initCatCode '#' = ParamCharCat
+    initCatCode '^' = SuperscriptCat
+    initCatCode '_' = SubscriptCat
+    initCatCode '\NUL' = IgnoredCat
+    initCatCode ' ' = SpaceCat
+    initCatCode c
+      | Char.isAsciiUpper c = LetterCat
+      | Char.isAsciiLower c = LetterCat
+    initCatCode '~' = ActiveCat
+    initCatCode '%' = CommentPrefixCat
+    initCatCode c
+      | c <= '\DEL' = OtherCat
+    initCatCode _ = InvalidCat
+
+
+-- * Lexemes
+
+data (Pos p) => Lexeme p =
+    Character Char CatCode p  -- ^ Character token
+  | ControlWord String p      -- ^ Control word
+  | ControlSymbol Char p      -- ^ Control symbol
+  | ControlSpace p            -- ^ Control space
+  | Parameter Char p          -- ^ Parameter token
+  | Space p                   -- ^ Space
+  | Comment String p          -- ^ Comment
+  | EOF p                     -- ^ End of file
+
+
+-- * Errors
+
+-- | A lexing errors.
+data (Pos p) => LexingError p =
+    InvalidChar !Char p
+  deriving (Eq, Ord)
+
+-- | Turn an error into a located error 
+makeErrMsg :: (Pos p) => LexingError p -> LocatedMsg p
+makeErrMsg (InvalidChar char pos) =
+  let msg = "Invalid character U+" ++ codePoint char ++ "."
+  in (msg, pos)
+  where
+    codePoint c = let hex = showHex (Char.ord c) "" in
+      replicate (max (4 - length hex) 0) '0' ++ hex
+      -- justifyRight 4 '0' $ showHex (Char.ord c) ""
+
+
+-- * Lexer Type
+
+type TexLexer resultType p = Base.Lexer (LexingError p) (LexingState p) resultType
+
+
+-- * Lexer State
+
+data InputState =
+    NewLine
+  | SkippingSpaces
+  | MiddleOfLine
+
+-- | The current lexing state.
+data (Pos p) => LexingState p = LexingState{
+    position :: p,
+    -- ^ Current position
+    catCodes :: CatCodeMap,
+    -- ^ Current category codes
+    inputState :: InputState,
+    -- ^ Current input state
+    endlineChar :: Maybe Char
+    -- ^ Current value of @\\endlinechar@
+  }
+
+-- | The initial lexing state.
+initLexingState :: (Pos p) => p -> CatCodeMap -> LexingState p
+initLexingState pos catCodes = LexingState{
+    position = pos,
+    catCodes = catCodes,
+    inputState = undefined,
+    endlineChar = Just '\r'
+  }
+
+
+-- * Running a Lexer
+
+runLexer :: (Msg p m)
+         => p             -- ^ Initial position
+         -> Text          -- ^ Input text
+         -> String        -- ^ Label (e.g. file name)
+         -> CatCodeMap    -- ^ Initial category codes
+         -> m [Lexeme p]
+runLexer initPos inputText inputTextLabel initCatCodes =
+  Base.runLexer
+    texText
+    (initLexingState initPos initCatCodes)
+    inputText
+    inputTextLabel
+    (handleError makeErrMsg)
+
+
+-- * Lexer Combinators
+
+-- | A ForTheL text in the TeX dialect: ...
+texText :: (Pos p) => TexLexer [Lexeme p] p
+texText = undefined
+
+-- | A line end: Trailing spaces (which are ignored) followed by a line break.
+lineEnd :: (Pos p) => FtlLexer ([Lexeme p], LexingState p) p
+lineEnd = do
+  state <- get
+  let pos = position state
+  spaces <- takeWhileP isSpace
+  let newPos = explodeString spaces pos
+  lineBreak <- case lineBreakType of
+    CR -> string "\r"
+    LF -> string "\n"
+    CRLF -> string "\r\n"
+  let lineBreakPos = getStringPos lineBreak newPos
+      newPos' = explodeString lineBreak newPos
+  put state{
+    position = newPos'
+  }
+  let catCodes = catCodes state
+  return $ case endlineChar state of
+    Just c -> ([Character c (Map.lookup c catCodes)], state)
+    Nothing -> ([], state)
