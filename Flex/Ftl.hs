@@ -28,12 +28,12 @@ import Flex.Base qualified as Base
 -- * Category Codes
 
 data CatCode =
-    SpaceCat
-  | LineBreakCat
-  | AlphaNumCat
-  | SymbolCat
-  | CommentPrefixCat
-  | InvalidCat
+    SpaceCat          -- ^ Horizontal space
+  | LineBreakCat      -- ^ Line break
+  | AlphaNumCat       -- ^ Alphanumeric charcter
+  | SymbolCat         -- ^ Symbol
+  | CommentPrefixCat  -- ^ Comment prefix
+  | InvalidCat        -- ^ Invalid character
   deriving Eq
 
 type CatCodeMap = Map.Map Char CatCode
@@ -45,7 +45,7 @@ isSpace catCodeMap c =
   Map.lookup c catCodeMap == Just SpaceCat
 
 -- | Checks whether a character is a line break character wrt. a given category 
--- code mapping (default: @\\CR@).
+-- code mapping (default: @\\n@).
 isLineBreak :: CatCodeMap -> Char -> Bool
 isLineBreak catCodeMap c =
   Map.lookup c catCodeMap == Just LineBreakCat
@@ -77,15 +77,7 @@ isInvalidChar catCodeMap c =
      Map.lookup c catCodeMap == Just InvalidCat
   || isNothing (Map.lookup c catCodeMap)
 
--- | Default category code mapping for FTL documents:
---
--- * The ASCII space character has category @SpaceCat@.
--- * The carriage return has category @LineBreakCat@.
--- * Alphanumeric ASCII characters have category @AlphaNumCat@.
--- * ASCII symbols except @#@ have category @SymbolCat@.
--- * @#@ has category @CommentPrefixCat@.
--- * Any other ASCII characters has category @InvalidCat@.
--- * Any other characters are not in that mapping.
+-- | Default category code mapping for FTL documents.
 defaultCatCodes :: CatCodeMap
 defaultCatCodes = Map.fromAscList
   [(c, initCatCode c) | c <- ['\NUL' .. '\DEL']]
@@ -113,7 +105,7 @@ data (Pos p) => Lexeme p =
     Symbol Char p
     -- ^ A symbol
   | Word String p
-    -- ^ An alpha-numeric string
+    -- ^ A sequence of alphanumeric characters
   | Space p
     -- ^ A sequence of (horizontal and vertical) white space characters
   | Comment String p
@@ -132,8 +124,7 @@ data (Pos p) => LexingError p =
 -- | Turn an error into a located error 
 makeErrMsg :: (Pos p) => LexingError p -> LocatedMsg p
 makeErrMsg (InvalidChar char pos) =
-  let msg = "Invalid character " ++ show [char] ++ " " ++
-            "(U+" ++ codePoint char ++ ")."
+  let msg = "Invalid character U+" ++ codePoint char ++ "."
   in (msg, pos)
   where
     codePoint c = let hex = showHex (Char.ord c) "" in
@@ -167,19 +158,17 @@ initLexingState pos catCodes = LexingState{
 -- * Running a Lexer
 
 runLexer :: (Msg p m)
-         => p                             -- ^ Initial position
-         -> Text                          -- ^ Input text
-         -> String                        -- ^ Label (e.g. file name)
-         -> CatCodeMap                    -- ^ Initial category codes
-         -> ([Lexeme p] -> m [Lexeme p])  -- ^ Lexeme modifier
+         => p             -- ^ Initial position
+         -> Text          -- ^ Input text
+         -> String        -- ^ Label (e.g. file name)
+         -> CatCodeMap    -- ^ Initial category codes
          -> m [Lexeme p]
-runLexer initPos inputText inputTextLabel initCatCodes modifier =
+runLexer initPos inputText inputTextLabel initCatCodes =
   Base.runLexer
     ftlText
     (initLexingState initPos initCatCodes)
     inputText
     inputTextLabel
-    modifier
     (handleError makeErrMsg)
 
 

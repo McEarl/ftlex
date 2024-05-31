@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.0.5
+
+Revise `runLexer` signatures.
+
+
 ## v0.0.4
 
 Revise module structure.
