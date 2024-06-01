@@ -3,7 +3,10 @@
 --
 -- Abstract lexer type.
 
-module Flex.Base (Lexer, runLexer) where
+module Flex.Base (
+  Lexer,
+  runLexer
+) where
 
 import Data.Text.Lazy (Text)
 import Control.Monad.Trans.State.Strict (evalState, State)
@@ -21,12 +24,10 @@ runLexer :: (Monad m)
          -- ^ Initial lexing state
          -> Text
          -- ^ Input text
-         -> String
-         -- ^ Label (e.g. file name)
          -> (ParseErrorBundle Text errorType -> m resultType)
          -- ^ Error handler
          -> m resultType
-runLexer lexer initState text label e =
-  case evalState (runParserT lexer label text) initState of
+runLexer lexer initState text e =
+  case evalState (runParserT lexer "" text) initState of
     Left err -> e err
     Right lexemes -> pure lexemes

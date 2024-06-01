@@ -20,7 +20,6 @@ import Data.Text.Lazy qualified as Text
 import Control.Monad.State.Class (get, put, gets)
 import Text.Megaparsec hiding (Pos)
 import Data.Char qualified as Char
-import Numeric (showHex)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isNothing)
 import Flex.Position
@@ -109,11 +108,11 @@ defaultCatCodes = Map.fromAscList
 data (Pos p) => Lexeme p =
     Symbol Char p
     -- ^ A symbol
-  | Word String p
+  | Word Text p
     -- ^ A sequence of alphanumeric characters
   | Space p
     -- ^ A sequence of (horizontal and vertical) white space characters
-  | Comment String p
+  | Comment Text p
     -- ^ A comment
   | EOF p
     -- ^ End of file
@@ -123,18 +122,14 @@ data (Pos p) => Lexeme p =
 
 -- | A lexing errors.
 data (Pos p) => LexingError p =
-    InvalidChar !Char p
+    InvalidChar Char p
   deriving (Eq, Ord)
 
 -- | Turn an error into a located error 
 makeErrMsg :: (Pos p) => LexingError p -> LocatedMsg p
 makeErrMsg (InvalidChar char pos) =
-  let msg = "Invalid character U+" ++ codePoint char ++ "."
+  let msg = "Invalid character " <> codePoint char <> "."
   in (msg, pos)
-  where
-    codePoint c = let hex = showHex (Char.ord c) "" in
-      replicate (max (4 - length hex) 0) '0' ++ hex
-      -- justifyRight 4 '0' $ showHex (Char.ord c) ""
 
 
 -- * Splitting the Input Text
@@ -145,8 +140,7 @@ data LineBreakType =
   | LF    -- ^ Line feed (@\\n@)
   | CRLF  -- ^ Carriage return + line feed (@\\r\\n@)
 
--- | @splitText catCodeMap lineBreakType text@ splits a text @text@
--- in
+-- | @splitText catCodeMap lineBreakType text@ splits a text @text@ in
 -- 1. the content of its first line, without trailing spaces and the line break
 --    character(s) (where the former are determined by @catCodeMap@ and the
 --    latter by @lineBreakType@),
@@ -183,12 +177,11 @@ data (Pos p) => LexingState p = LexingState{
 
 runLexer :: (Msg p m)
          => p             -- ^ Initial position
-         -> Text          -- ^ Input text
-         -> String        -- ^ Label (e.g. file name)
+         -> Text.Text     -- ^ Input text
          -> LexingState p -- ^ Lexing state
          -> LineBreakType -- ^ Line break type
          -> m [Lexeme p]
-runLexer pos text label state lineBreakType = do
+runLexer pos text state lineBreakType = do
   -- Split the input text at the first linebreak:
   let (line, lineBreak, rest) = splitText
         (catCodes state)
@@ -199,18 +192,18 @@ runLexer pos text label state lineBreakType = do
     ftlLine
     state
     line
-    ""
     (handleError makeErrMsg)
   -- Repeat the procedure for the remainder of the input text and append an EOF
   -- lexeme:
-  let newPos = (position newState)
-      lineBreakPos = getStringPos (Text.unpack lineBreak) newPos
-      newPos' = explodeString (Text.unpack lineBreak) newPos
+  let newPos = position newState
+      lineBreak' = lineBreak
+      lineBreakPos = getPosOf lineBreak' newPos
+      newPos' = getNextPos lineBreak' newPos
       lineBreakLexeme = Space lineBreakPos
       newState' = newState{position = newPos'}
   restLexemes <- if Text.null rest
     then pure [EOF newPos']
-    else runLexer newPos' rest "" newState' lineBreakType
+    else runLexer newPos' rest newState' lineBreakType
   return $ lexemes ++ [lineBreakLexeme] ++ restLexemes
 
 
@@ -240,20 +233,20 @@ comment = do
   prefix <- satisfy $ isCommentChar cats
   -- Consume as many characters as possible until either an invalid character,
   -- a vertical space or the end of input is reached:
-  commentBody <- many $ satisfy $ disjunction [
+  commentBody <- Text.pack <$> many (satisfy $ disjunction [
       isSpace cats,
       isAlphanumChar cats,
       isSymbol cats,
       isCommentChar cats
-    ]
+    ])
+  let comment = Text.cons prefix commentBody
   -- If an invalid character is reached, chatch it (at the position that has
   -- been reached during the execution of the last line):
-  optional $ catchInvalidCharAt (explodeString (prefix : commentBody) pos)
+  optional $ catchInvalidCharAt (getNextPos comment pos)
   -- If no invalid character is reached, expect the end of input:
   eof
-  let comment = prefix : commentBody
-      newPos = explodeString comment pos
-      commentPosition = getStringPos comment pos
+  let newPos = getNextPos comment pos
+      commentPosition = getPosOf comment pos
   put state{
       position = newPos
     }
@@ -266,9 +259,9 @@ space = do
   state <- get
   let pos = position state
       cats = catCodes state
-  space <- some (satisfy $ disjunction [isSpace cats, isLineBreak cats])
-  let newPos = explodeString space pos
-      spacePos = getStringPos space pos
+  space <- Text.pack <$> some (satisfy $ disjunction [isSpace cats, isLineBreak cats])
+  let newPos = getNextPos space pos
+      spacePos = getPosOf space pos
   put state{
       position = newPos
     }
@@ -280,9 +273,9 @@ word = do
   state <- get
   let pos = position state
       cats = catCodes state
-  lexeme <- some (satisfy $ isAlphanumChar cats)
-  let newPos = explodeString lexeme pos
-      lexemePos = getStringPos lexeme pos
+  lexeme <- Text.pack <$> some (satisfy $ isAlphanumChar cats)
+  let newPos = getNextPos lexeme pos
+      lexemePos = getPosOf lexeme pos
   put state{
       position = newPos
     }
@@ -295,8 +288,8 @@ symbol = do
   let pos = position state
       cats = catCodes state
   symbol <- satisfy $ isSymbol cats
-  let newPos = explodeString [symbol] pos
-      symbolPos = getStringPos [symbol] pos
+  let newPos = getNextPos (Text.singleton symbol) pos
+      symbolPos = getPosOf (Text.singleton symbol) pos
   put state{
       position = newPos
     }
@@ -309,7 +302,7 @@ catchInvalidCharAt pos = do
   state <- get
   let cats = catCodes state
   char <- satisfy $ isInvalidChar cats
-  let charPos = getStringPos [char] pos
+  let charPos = getPosOf (Text.singleton char) pos
       err = InvalidChar char charPos
   customFailure err
 

@@ -5,12 +5,14 @@
 
 module Flex.Position (Pos(..)) where
 
+import Data.Text.Lazy (Text)
+
 class (Ord p) => Pos p where
   noPos :: p
   -- ^ No position
-  explodeString :: String -> p -> p
+  getNextPos :: Text -> p -> p
   -- ^ Take a string together with its starting position and return the ending
   -- position of that string
-  getStringPos :: String -> p -> p
+  getPosOf :: Text -> p -> p
   -- ^ Take a string together with its starting position and return the position
   -- of the whole string

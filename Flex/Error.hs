@@ -3,6 +3,8 @@
 --
 -- Lexing errors.
 
+{-# LANGUAGE OverloadedStrings #-}
+
 module Flex.Error (
   handleError
 ) where
@@ -34,8 +36,8 @@ showError (ParseErrorBundle parseErrors _) errorHandler = case NonEmpty.head par
 unknownError :: (Pos p) => LocatedMsg p
 unknownError =
   let msg =
-        "Unknown lexing error. " ++
-        "This is likely to be a bug in FLex. " ++
+        "Unknown lexing error. " <>
+        "This is likely to be a bug in FLex. " <>
         "Please file an issue if it has not been reported yet."
       pos = noPos
   in (msg, pos)
