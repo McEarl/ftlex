@@ -33,7 +33,6 @@ import Flex.Helpers
 
 data CatCode =
     SpaceCat          -- ^ Horizontal space
-  | LineBreakCat      -- ^ Line break
   | AlphaNumCat       -- ^ Alphanumeric charcter
   | SymbolCat         -- ^ Symbol
   | CommentPrefixCat  -- ^ Comment prefix
@@ -42,40 +41,29 @@ data CatCode =
 
 type CatCodeMap = Map.Map Char CatCode
 
--- | Checks whether a character is a space wrt. a given category code mapping
--- (default: @ @).
+-- | Checks whether a character is a space wrt. a given category code mapping.
 isSpace :: CatCodeMap -> Char -> Bool
 isSpace catCodeMap c =
   Map.lookup c catCodeMap == Just SpaceCat
 
--- | Checks whether a character is a line break character wrt. a given category 
--- code mapping (default: @\\n@).
-isLineBreak :: CatCodeMap -> Char -> Bool
-isLineBreak catCodeMap c =
-  Map.lookup c catCodeMap == Just LineBreakCat
-
 -- | Checks whether a character is an alpha-numeric character wrt. a given 
--- category code mapping (default: any ASCII letter or ASCII digit).
+-- category code mapping.
 isAlphanumChar :: CatCodeMap -> Char -> Bool
 isAlphanumChar catCodeMap c =
   Map.lookup c catCodeMap == Just AlphaNumCat
 
--- | Checks whether a character is a symbol wrt. a given category code mapping
--- (default: any ASCII character that is neither a control character, nor a
--- letter, nor a digit, nor a space, nor @#@).
+-- | Checks whether a character is a symbol wrt. a given category code mapping.
 isSymbol :: CatCodeMap -> Char -> Bool
 isSymbol catCodeMap c =
   Map.lookup c catCodeMap == Just SymbolCat
 
 -- | Checks whether a character is a comment prefix character wrt. a given
--- category code mapping (default: @%@).
+-- category code mapping.
 isCommentChar :: CatCodeMap -> Char -> Bool
 isCommentChar catCodeMap c =
   Map.lookup c catCodeMap == Just CommentPrefixCat
 
--- | Checks whether a character is invalid wrt. a given category code mapping
--- (default: any non-ASCII character and any ASCII control character except
--- @\\CR@).
+-- | Checks whether a character is invalid wrt. a given category code mapping.
 isInvalidChar :: CatCodeMap -> Char -> Bool
 isInvalidChar catCodeMap c =
      Map.lookup c catCodeMap == Just InvalidCat
@@ -88,7 +76,6 @@ defaultCatCodes = Map.fromAscList
   where
     initCatCode :: Char -> CatCode
     initCatCode ' ' = SpaceCat
-    initCatCode '\r' = LineBreakCat
     initCatCode c
       | Char.isAsciiUpper c = AlphaNumCat
       | Char.isAsciiLower c = AlphaNumCat
@@ -106,16 +93,25 @@ defaultCatCodes = Map.fromAscList
 -- * Lexemes
 
 data (Pos p) => Lexeme p =
-    Symbol Char p
-    -- ^ A symbol
-  | Word Text p
-    -- ^ A sequence of alphanumeric characters
-  | Space p
-    -- ^ A sequence of (horizontal and vertical) white space characters
-  | Comment Text p
-    -- ^ A comment
-  | EOF p
-    -- ^ End of file
+    Symbol{
+      symbolContent :: Char,
+      sourceText :: Text,
+      sourcePos :: p
+    } -- ^ A symbol
+  | Word{
+      wordContent :: Text,
+      sourceText :: Text,
+      sourcePos :: p
+    } -- ^ A sequence of alphanumeric characters
+  | Space{
+      sourceText :: Text,
+      sourcePos :: p
+    } -- ^ A sequence of (horizontal and vertical) white space characters
+  | Comment{
+      commentContent :: Text,
+      sourceText :: Text,
+      sourcePos :: p
+    } -- ^ A comment
 
 
 -- * Errors
@@ -193,16 +189,18 @@ runLexer pos text state lineBreakType = do
     state
     line
     (handleError makeErrMsg)
-  -- Repeat the procedure for the remainder of the input text and append an EOF
-  -- lexeme:
+  -- Turn the line break into a space lexeme:
   let newPos = position newState
-      lineBreak' = lineBreak
-      lineBreakPos = getPosOf lineBreak' newPos
-      newPos' = getNextPos lineBreak' newPos
-      lineBreakLexeme = Space lineBreakPos
+      lineBreakPos = getPosOf lineBreak newPos
+      newPos' = getNextPos lineBreak newPos
+      lineBreakLexeme = Space{
+          sourceText = lineBreak,
+          sourcePos = lineBreakPos
+        }
       newState' = newState{position = newPos'}
+  -- Repeat the procedure for the remainder of the input text:
   restLexemes <- if Text.null rest
-    then pure [EOF newPos']
+    then pure []
     else runLexer newPos' rest newState' lineBreakType
   return $ lexemes ++ [lineBreakLexeme] ++ restLexemes
 
@@ -240,17 +238,21 @@ comment = do
       isCommentChar cats
     ])
   let comment = Text.cons prefix commentBody
+      newPos = getNextPos comment pos
   -- If an invalid character is reached, chatch it (at the position that has
   -- been reached during the execution of the last line):
-  optional $ catchInvalidCharAt (getNextPos comment pos)
+  optional $ catchInvalidCharAt newPos
   -- If no invalid character is reached, expect the end of input:
   eof
-  let newPos = getNextPos comment pos
-      commentPosition = getPosOf comment pos
+  let commentPosition = getPosOf comment pos
   put state{
       position = newPos
     }
-  return $ Comment commentBody commentPosition
+  return $ Comment{
+      commentContent = commentBody,
+      sourceText = comment,
+      sourcePos = commentPosition
+    }
 
 
 -- | White space: Longest possible string of ASCII space characters.
@@ -259,13 +261,16 @@ space = do
   state <- get
   let pos = position state
       cats = catCodes state
-  space <- Text.pack <$> some (satisfy $ disjunction [isSpace cats, isLineBreak cats])
+  space <- Text.pack <$> some (satisfy $ isSpace cats)
   let newPos = getNextPos space pos
       spacePos = getPosOf space pos
   put state{
       position = newPos
     }
-  return $ Space spacePos
+  return $ Space{
+      sourceText = space,
+      sourcePos = spacePos
+    }
 
 -- | A lexeme: Longest possible string of alpha-numeric ASCII characters.
 word :: (Pos p) => FtlLexer (Lexeme p) p
@@ -279,7 +284,11 @@ word = do
   put state{
       position = newPos
     }
-  return $ Word lexeme lexemePos
+  return $ Word{
+      wordContent = lexeme,
+      sourceText = lexeme,
+      sourcePos = lexemePos
+    }
 
 -- | A symbol: Any singleton ASCII symbol character.
 symbol :: (Pos p) => FtlLexer (Lexeme p) p
@@ -288,12 +297,17 @@ symbol = do
   let pos = position state
       cats = catCodes state
   symbol <- satisfy $ isSymbol cats
-  let newPos = getNextPos (Text.singleton symbol) pos
-      symbolPos = getPosOf (Text.singleton symbol) pos
+  let symbolText = Text.singleton symbol
+      newPos = getNextPos symbolText pos
+      symbolPos = getPosOf symbolText pos
   put state{
       position = newPos
     }
-  return $ Symbol symbol symbolPos
+  return $ Symbol{
+      symbolContent = symbol,
+      sourceText = symbolText,
+      sourcePos = symbolPos
+    }
 
 -- | Catch an invalid character and report it together with a given position
 -- (which is intended to be the position of that character) as a lexing error.

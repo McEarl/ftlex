@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.2
+
+* Save the text a lexeme is generated from.
+
+* Remove EOF lexeme.
+
+* Remove line break category.
+
+
 ## v0.1.1
 
 * Replace `String` by `Text`.
