@@ -9,9 +9,9 @@ module Flex.Ftl (
   CatCode(..),
   CatCodeMap,
   defaultCatCodes,
+  initState,
   runLexer,
   LexingState(..),
-  LineBreakType(..),
   Lexeme(..)
 ) where
 
@@ -27,6 +27,7 @@ import Flex.Error
 import Flex.Message
 import Flex.Base qualified as Base
 import Flex.Helpers
+import Flex.Split
 
 
 -- * Category Codes
@@ -116,7 +117,7 @@ data (Pos p) => Lexeme p =
 
 -- * Errors
 
--- | A lexing errors.
+-- | A lexing error.
 data (Pos p) => LexingError p =
     InvalidChar Char p
   deriving (Eq, Ord)
@@ -126,31 +127,6 @@ makeErrMsg :: (Pos p) => LexingError p -> LocatedMsg p
 makeErrMsg (InvalidChar char pos) =
   let msg = "Invalid character " <> codePoint char <> "."
   in (msg, pos)
-
-
--- * Splitting the Input Text
-
--- | Supported types of line breaks.
-data LineBreakType =
-    CR    -- ^ Carriage return (@\\r@)
-  | LF    -- ^ Line feed (@\\n@)
-  | CRLF  -- ^ Carriage return + line feed (@\\r\\n@)
-
--- | @splitText catCodeMap lineBreakType text@ splits a text @text@ in
--- 1. the content of its first line, without trailing spaces and the line break
---    character(s) (where the former are determined by @catCodeMap@ and the
---    latter by @lineBreakType@),
--- 2. all trailing spaces and the line break character(s), and
--- 3. the rest of the text.
-splitText :: CatCodeMap -> LineBreakType -> Text -> (Text, Text, Text)
-splitText catCodeMap lineBreakType text =
-  let lineBreak = case lineBreakType of
-        CR -> "\r"
-        LF -> "\n"
-        CRLF -> "\r\n"
-      (line, rest) = Text.breakOn lineBreak text
-      rest' = Text.drop (Text.length lineBreak) rest
-  in (line, lineBreak, rest')
 
 
 -- * Lexer Type
@@ -168,6 +144,12 @@ data (Pos p) => LexingState p = LexingState{
     -- ^ Current category codes
   }
 
+initState :: (Pos p) => p -> LexingState p
+initState pos = LexingState{
+    position = pos,
+    catCodes = defaultCatCodes
+  }
+
 
 -- * Running a Lexer
 
@@ -179,10 +161,7 @@ runLexer :: (Msg p m)
          -> m [Lexeme p]
 runLexer pos text state lineBreakType = do
   -- Split the input text at the first linebreak:
-  let (line, lineBreak, rest) = splitText
-        (catCodes state)
-        lineBreakType
-        text
+  let (line, lineBreak, rest) = splitText lineBreakType text
   -- Lex the first line of the input text:
   (lexemes, newState) <- Base.runLexer
     ftlLine

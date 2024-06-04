@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.3
+
+* Move splitter to own module.
+
+* Export initial lexing state.
+
+
 ## v0.1.2
 
 * Save the text a lexeme is generated from.
