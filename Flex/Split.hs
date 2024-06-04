@@ -6,7 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Flex.Split (
-  LineBreakType,
+  LineBreakType(..),
   splitText
 ) where
 

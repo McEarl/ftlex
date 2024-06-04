@@ -155,7 +155,7 @@ initState pos = LexingState{
 
 runLexer :: (Msg p m)
          => p             -- ^ Initial position
-         -> Text.Text     -- ^ Input text
+         -> Text          -- ^ Input text
          -> LexingState p -- ^ Lexing state
          -> LineBreakType -- ^ Line break type
          -> m [Lexeme p]
@@ -172,7 +172,7 @@ runLexer pos text state lineBreakType = do
   let newPos = position newState
       lineBreakPos = getPosOf lineBreak newPos
       newPos' = getNextPos lineBreak newPos
-      lineBreakLexeme = Space{
+      lineBreakLexeme = singleton Space{
           sourceText = lineBreak,
           sourcePos = lineBreakPos
         }
@@ -181,13 +181,12 @@ runLexer pos text state lineBreakType = do
   restLexemes <- if Text.null rest
     then pure []
     else runLexer newPos' rest newState' lineBreakType
-  return $ lexemes ++ [lineBreakLexeme] ++ restLexemes
+  return $ lexemes ++ lineBreakLexeme ++ restLexemes
 
 
 -- * Lexer Combinators
 
--- | A ForTheL text in the FTL dialect: Arbitrary many tokens, interspersed with
--- optional white space, until the end of the input text is reached.
+-- | A single line of a ForTheL text in the FTL dialect.
 ftlLine :: (Pos p) => FtlLexer ([Lexeme p], LexingState p) p
 ftlLine = do
   lexemes <- many $ choice [

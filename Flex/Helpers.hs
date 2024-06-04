@@ -7,7 +7,8 @@
 
 module Flex.Helpers (
   disjunction,
-  codePoint
+  codePoint,
+  singleton
 ) where
 
 import Data.Text.Lazy (Text)
@@ -30,3 +31,7 @@ toHex n = let r = n `mod` 16 in
 -- | The Unicode code point of a character, e.g. @U+004C@.
 codePoint :: Char -> Text
 codePoint c = "U+" <> (Text.justifyRight 4 '0' . toHex . Char.ord) c
+
+-- | A singleton list.
+singleton :: a -> [a]
+singleton x = [x]
