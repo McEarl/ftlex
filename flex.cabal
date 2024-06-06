@@ -32,6 +32,7 @@ library
     Flex.Message
     Flex.Position
     Flex.Split
+    Flex.Tex
   other-modules:
     Flex.Base
     Flex.Error

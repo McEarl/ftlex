@@ -20,7 +20,7 @@ import Control.Monad.State.Class (get, put, gets)
 import Text.Megaparsec hiding (Pos)
 import Data.Char qualified as Char
 import Data.Map.Strict qualified as Map
-import Data.Maybe (isNothing)
+import Data.Maybe (isNothing, fromMaybe)
 import Flex.Position
 import Flex.Error
 import Flex.Message
@@ -32,22 +32,23 @@ import Flex.Split
 -- * Category Codes
 
 data CatCode =
-    EscapeCharCat     -- ^ Escape character
-  | BeginGroupCat     -- ^ Begin group character
-  | EndGroupCat       -- ^ End group character
-  | MathShiftCat      -- ^ Math shift character
-  | AlignTabCat       -- ^ Alignment tab
-  | EndOfLineCat      -- ^ Line break
-  | ParamCharCat      -- ^ Parameter character
-  | SuperscriptCat    -- ^ Superscript character
-  | SubscriptCat      -- ^ Subscript character
-  | IgnoredCat        -- ^ Ignored character
-  | SpaceCat          -- ^ Horizontal space
-  | LetterCat         -- ^ Letter
-  | OtherCat          -- ^ Other character
-  | ActiveCat         -- ^ Active character
-  | CommentPrefixCat  -- ^ Comment Prefix
-  | InvalidCat        -- ^ Ignored character
+    EscapeCharCat     -- ^  0: Escape character
+  | BeginGroupCat     -- ^  1: Begin group character
+  | EndGroupCat       -- ^  2: End group character
+  | MathShiftCat      -- ^  3: Math shift character
+  | AlignTabCat       -- ^  4: Alignment tab
+  | EndOfLineCat      -- ^  5: Line break
+  | ParamCharCat      -- ^  6: Parameter character
+  | SuperscriptCat    -- ^  7: Superscript character
+  | SubscriptCat      -- ^  8: Subscript character
+  | IgnoredCat        -- ^  9: Ignored character
+  | SpaceCat          -- ^ 10: Horizontal space
+  | LetterCat         -- ^ 11: Letter
+  | OtherCat          -- ^ 12: Other character
+  | ActiveCat         -- ^ 13: Active character
+  | CommentPrefixCat  -- ^ 14: Comment Prefix
+  | InvalidCat        -- ^ 15: Invalid character
+  | UnknownCat        -- ^     Unknown character
   deriving Eq
 
 type CatCodeMap = Map.Map Char CatCode
@@ -144,11 +145,15 @@ isCommentPrefix catCodeMap c =
   Map.lookup c catCodeMap == Just CommentPrefixCat
 
 -- | Checks whether a character is an invalid character wrt. a given category
--- code mapping (default: any non-ASCII character).
+-- code mapping (default: @\\DEL@).
 isInvalidChar :: CatCodeMap -> Char -> Bool
 isInvalidChar catCodeMap c =
      Map.lookup c catCodeMap == Just InvalidCat
-  || isNothing (Map.lookup c catCodeMap)
+
+-- | Checks whether a character is an invalid character wrt. a given category
+-- code mapping (default: any non-ASCII character).
+isUnknownChar :: CatCodeMap -> Char -> Bool
+isUnknownChar catCodeMap c = isNothing (Map.lookup c catCodeMap)
 
 -- | Default category code mapping for TeX documents.
 defaultCatCodes :: CatCodeMap
@@ -172,12 +177,16 @@ defaultCatCodes = Map.fromAscList [(c, initCatCode c) | c <- ['\NUL' .. '\DEL']]
     initCatCode '~' = ActiveCat
     initCatCode '%' = CommentPrefixCat
     initCatCode c
-      | c <= '\DEL' = OtherCat
-    initCatCode _ = InvalidCat
+      | c < '\DEL' = OtherCat
+    initCatCode '\DEL' = InvalidCat
+    initCatCode _ = UnknownCat
 
 
 -- * Lexemes
 
+-- | TeX lexemes: TeX tokens (with additional source text and source position
+-- information) plus two additional constructors for skipped characters and
+-- comments.
 data (Pos p) => Lexeme p =
     Character{
       charContent :: Char,
@@ -204,10 +213,10 @@ data (Pos p) => Lexeme p =
       sourceText :: Text,
       sourcePos :: p
     } -- ^ Parameter token
-  | Space{
+  | Skipped{
       sourceText :: Text,
       sourcePos :: p
-    } -- ^ Space
+    } -- ^ Skipped characters
   | Comment{
       commentContent :: Text,
       sourceText :: Text,
@@ -220,12 +229,16 @@ data (Pos p) => Lexeme p =
 -- | A lexing error.
 data (Pos p) => LexingError p =
     InvalidChar Char p
+  | UnknownChar Char p
   deriving (Eq, Ord)
 
 -- | Turn an error into a located error 
 makeErrMsg :: (Pos p) => LexingError p -> LocatedMsg p
 makeErrMsg (InvalidChar char pos) =
   let msg = "Invalid character " <> codePoint char <> "."
+  in (msg, pos)
+makeErrMsg (UnknownChar char pos) =
+  let msg = "Unknown character " <> codePoint char <> "."
   in (msg, pos)
 
 
@@ -283,22 +296,22 @@ runLexer pos text state lineBreakType = do
     state{inputState = NewLine}
     trimmedLine
     (handleError makeErrMsg)
-  -- Turn the trailing spaces into a space lexeme:
+  -- Skip the trailing spaces:
   let newPos = position newState
       trailingSpacesPos = getPosOf trailingSpaces newPos
       newPos' = getNextPos trailingSpaces newPos
       spaceLexeme = if Text.null trailingSpaces
-        then singleton Space{
+        then singleton Skipped{
             sourceText = trailingSpaces,
             sourcePos = trailingSpacesPos
           }
         else []
-  -- Turn the line break into a line break character lexeme (or a space lexeme
-  -- if there is no @\\endline@ character):
+  -- Turn the line break into a line break character lexeme (or skip it if there
+  -- is no @\\endline@ character):
   let lineBreakPos = getPosOf lineBreak newPos'
       newPos'' = getNextPos lineBreak newPos'
       lineBreakLexeme = case endlineChar state of
-        Nothing -> singleton Space{
+        Nothing -> singleton Skipped{
             sourceText = lineBreak,
             sourcePos = lineBreakPos
           }
@@ -320,24 +333,35 @@ runLexer pos text state lineBreakType = do
 
 -- | A single line of a ForTheL text in the TeX dialect.
 texLine :: (Pos p) => TexLexer ([Lexeme p], LexingState p) p
-texLine = undefined
+texLine = do
+  lexemes <- many $ choice [
+      comment,
+      controlSequence,
+      character,
+      parameter,
+      space,
+      endOfLine,
+      ignoredCharacter,
+      catchInvalidChar,
+      catchUnknownChar
+    ]
+  eof
+  state <- get
+  return (concat lexemes, state)
 
 
 -- ** Control Sequences
 
-controlSequence :: (Pos p) => TexLexer (Lexeme p) p
+controlSequence :: (Pos p) => TexLexer [Lexeme p] p
 controlSequence = try controlWord <|> try controlSymbol <|> controlSpace
 
-controlWord :: (Pos p) => TexLexer (Lexeme p) p
+controlWord :: (Pos p) => TexLexer [Lexeme p] p
 controlWord = do
   state <- get
   cats <- gets catCodes
   let pos = position state
-  escapeChar <- satisfy $ isEscapeChar cats
-  word <- Text.pack <$> some (choice [
-      satisfy (isLetter cats),
-      doubleSuperscript (isLetter cats)
-    ])
+  escapeChar <- satisfy' $ isEscapeChar cats
+  word <- Text.pack <$> some (satisfy' (isLetter cats))
   let command = Text.cons escapeChar word
       newPos = getNextPos command pos
       commandPos = getPosOf command pos
@@ -345,22 +369,35 @@ controlWord = do
       position = newPos,
       inputState = SkippingSpaces
     }
-  return $ ControlWord{
+  return $ singleton ControlWord{
       ctrlWordContent = word,
       sourceText = command,
       sourcePos = commandPos
     }
 
-controlSymbol :: (Pos p) => TexLexer (Lexeme p) p
+controlSymbol :: (Pos p) => TexLexer [Lexeme p] p
 controlSymbol = do
   state <- get
   cats <- gets catCodes
   let pos = position state
-  escapeChar <- satisfy $ isEscapeChar cats
-  symbol <- choice [
-      doubleSuperscript (isSymbolChar cats),
-      satisfy (isSymbolChar cats)
-    ]
+      isAllowedChar = disjunction [
+          isEscapeChar cats,
+          isBeginGroupChar cats,
+          isEndGroupChar cats,
+          isMathShiftChar cats,
+          isAlignTab cats,
+          isEndOfLine cats,
+          isParamChar cats,
+          isSuperscriptChar cats,
+          isSubscriptChar cats,
+          isIgnoredChar cats,
+          isOtherChar cats,
+          isActiveChar cats,
+          isCommentPrefix cats,
+          isInvalidChar cats -- Yes, an invalid character is acceptable.
+        ]
+  escapeChar <- satisfy' $ isEscapeChar cats
+  symbol <- satisfy' isAllowedChar
   let command = Text.cons escapeChar (Text.singleton symbol)
       newPos = getNextPos command pos
       commandPos = getPosOf command pos
@@ -368,39 +405,19 @@ controlSymbol = do
       position = newPos,
       inputState = MiddleOfLine
     }
-  return $ ControlSymbol{
+  return $ singleton ControlSymbol{
       ctrlSymbolContent = symbol,
       sourceText = command,
       sourcePos = commandPos
     }
-  where
-    isSymbolChar cats = disjunction [
-        isEscapeChar cats,
-        isBeginGroupChar cats,
-        isEndGroupChar cats,
-        isMathShiftChar cats,
-        isAlignTab cats,
-        isEndOfLine cats,
-        isParamChar cats,
-        isSuperscriptChar cats,
-        isSubscriptChar cats,
-        isIgnoredChar cats,
-        isOtherChar cats,
-        isActiveChar cats,
-        isCommentPrefix cats,
-        isInvalidChar cats -- Yes, an invalid character is acceptable.
-      ]
 
-controlSpace :: (Pos p) => TexLexer (Lexeme p) p
+controlSpace :: (Pos p) => TexLexer [Lexeme p] p
 controlSpace = do
   state <- get
   cats <- gets catCodes
   let pos = position state
-  escapeChar <- satisfy $ isEscapeChar cats
-  symbol <- choice [
-      doubleSuperscript (isSpace cats),
-      satisfy (isSpace cats)
-    ]
+  escapeChar <- satisfy' (isEscapeChar cats)
+  symbol <- satisfy' (isSpace cats)
   let command = Text.cons escapeChar (Text.singleton symbol)
       newPos = getNextPos command pos
       commandPos = getPosOf command pos
@@ -408,9 +425,256 @@ controlSpace = do
       position = newPos,
       inputState = SkippingSpaces
     }
-  return $ ControlSpace{
+  return $ singleton ControlSpace{
       sourceText = command,
       sourcePos = commandPos
+    }
+
+
+-- ** "Normal" Characters
+
+-- | A character with one of the following category codes:
+-- *  1 (begin group)
+-- *  2 (end group)
+-- *  3 (math shift)
+-- *  4 (alignment tab)
+-- *  7 (superscript)
+-- *  8 (subscript)
+-- * 11 (letter)
+-- * 12 (other)
+-- * 13 (active)
+character :: (Pos p) => TexLexer [Lexeme p] p
+character = do
+  state <- get
+  let cats = catCodes state
+      pos = position state
+      isAllowedChar = disjunction [
+          isBeginGroupChar cats,
+          isEndGroupChar cats,
+          isMathShiftChar cats,
+          isAlignTab cats,
+          isSuperscriptChar cats,
+          isSubscriptChar cats,
+          isLetter cats,
+          isOtherChar cats,
+          isActiveChar cats
+        ]
+  -- Consume a single character that makes a character token:
+  char <- satisfy' isAllowedChar
+  let catCode = fromMaybe InvalidCat (Map.lookup char cats)
+      charText = Text.singleton char
+      charPos = getPosOf charText pos
+      newPos = getNextPos charText pos
+  put state{
+      position = newPos,
+      inputState = MiddleOfLine
+    }
+  return $ singleton Character{
+      charContent = char,
+      charCatCode = catCode,
+      sourceText = charText,
+      sourcePos = charPos
+    }
+
+
+-- ** Parameter
+
+parameter :: (Pos p) => TexLexer [Lexeme p] p
+parameter = try param <|> consecParamChars
+
+-- | A parameter character.
+param :: (Pos p) => TexLexer [Lexeme p] p
+param = do
+  state <- get
+  let cats = catCodes state
+      pos = position state
+  paramChar <- satisfy' (isParamChar cats)
+  digit <- satisfy' Char.isDigit
+  let paramText = Text.pack [paramChar, digit]
+      paramPos = getPosOf paramText pos
+      newPos = getNextPos paramText pos
+  put state{
+      position = newPos,
+      inputState = MiddleOfLine
+    }
+  return $ singleton Parameter{
+      paramNumber = Char.digitToInt digit,
+      sourceText = paramText,
+      sourcePos = paramPos
+    }
+
+-- | Two consecutive parameter character.
+consecParamChars :: (Pos p) => TexLexer [Lexeme p] p
+consecParamChars = do
+  state <- get
+  let cats = catCodes state
+      pos = position state
+  fstParamChar <- satisfy' (isParamChar cats)
+  sndParamChar <- satisfy' (isParamChar cats)
+  let paramText = Text.pack [fstParamChar, sndParamChar]
+      paramPos = getPosOf paramText pos
+      newPos = getNextPos paramText pos
+  put state{
+      position = newPos,
+      inputState = MiddleOfLine
+    }
+  return $ singleton Character{
+      charContent = sndParamChar,
+      charCatCode = ParamCharCat,
+      sourceText = paramText,
+      sourcePos = paramPos
+    }
+
+
+-- ** End of Line
+
+-- | An end-of-line character:
+endOfLine :: (Pos p) => TexLexer [Lexeme p] p
+endOfLine = do
+  state <- get
+  let cats = catCodes state
+      pos = position state
+  -- Consume an end-of-line character:
+  char <- satisfy' $ isEndOfLine cats
+  let charText = Text.singleton char
+      charPos = getPosOf charText pos
+      newPos = getNextPos charText pos
+  -- Consume the rest of the line (which will be skipped):
+  rest <- Text.pack <$> many (satisfy (negation (isUnknownChar cats)))
+  let newPos' = getNextPos rest newPos
+      restPos = getPosOf rest newPos
+  -- Throw an error if there appears an unknown character in the rest of the
+  -- line:
+  optional $ catchUnknownCharAt newPos
+  -- Turn the line break character into a token (which depends on the current
+  -- input state):
+  let lexeme = case inputState state of
+        -- In state N, i.e. if the line so far contained at most spaces, insert
+        -- a @\\par@ token:
+        NewLine -> ControlWord{
+            ctrlWordContent = "par",
+            sourceText = charText,
+            sourcePos = charPos
+          }
+        -- In state S, insert nothing:
+        SkippingSpaces -> Skipped{
+            sourceText = charText,
+            sourcePos = charPos
+          }
+        -- In state M, insert a space token:
+        MiddleOfLine -> Character{
+            charContent = ' ', 
+            charCatCode = SpaceCat,
+            sourceText = charText,
+            sourcePos = charPos
+          }
+  -- Skip the rest of the line:
+  let skippedLexeme = Skipped{
+          sourceText = rest,
+          sourcePos = restPos
+        }
+  put state{
+      position = newPos',
+      inputState = NewLine
+    }
+  return [lexeme, skippedLexeme]
+
+
+-- ** Space
+
+-- | A space character.
+space :: (Pos p) => TexLexer [Lexeme p] p
+space = do
+  state <- get
+  let cats = catCodes state
+      pos = position state
+  spaceChar <- satisfy' (isSpace cats)
+  let spaceText = Text.singleton spaceChar
+      spacePos = getPosOf spaceText pos
+      newPos = getNextPos spaceText pos
+      (newInputState, lexeme) = case inputState state of
+        -- In state N, skip the space and stay in state N:
+        NewLine -> pair NewLine Skipped{
+            sourceText = spaceText,
+            sourcePos = spacePos
+          }
+        -- In state S, skip the space and stay in state S:
+        SkippingSpaces -> pair SkippingSpaces Skipped{
+            sourceText = spaceText,
+            sourcePos = spacePos
+          }
+        -- In state M, insert a space token and go into state S:
+        MiddleOfLine -> pair SkippingSpaces Character{
+            charContent = ' ', 
+            charCatCode = SpaceCat,
+            sourceText = spaceText,
+            sourcePos = spacePos
+          }
+  put state{
+      position = newPos,
+      inputState = newInputState
+    }
+  return $ [lexeme]
+
+
+-- ** Comments
+
+-- | A comment.
+comment :: (Pos p) => TexLexer [Lexeme p] p
+comment = do
+  state <- get
+  let cats = catCodes state
+      pos = position state
+  prefix <- satisfy' (isCommentPrefix cats)
+  commentBody <- takeWhileP Nothing (neitherNor [
+      isUnknownChar cats,
+      isEndOfLine cats
+    ])
+  let commentText = Text.cons prefix commentBody
+      commentPos = getPosOf commentText pos
+      newPos = getNextPos commentText pos
+  -- Throw an error if there appears an unknown character in the rest of the
+  -- line:
+  optional $ catchUnknownCharAt newPos
+  --  Otherwise, insert a comment lexeme:
+  let commentLexeme = Comment{
+      commentContent = commentBody,
+      sourceText = commentText,
+      sourcePos = commentPos
+    }
+  -- Skip the following end-of-line character:
+  lineBreakChar <- satisfy' $ isEndOfLine cats
+  let lineBreakText = Text.singleton lineBreakChar
+      lineBreakPos = getPosOf lineBreakText newPos
+      newPos' = getNextPos lineBreakText newPos
+      skippedLineBreak = Skipped{
+          sourceText = lineBreakText,
+          sourcePos = lineBreakPos
+        }
+  put state{
+      position = newPos'
+    }
+  return [commentLexeme, skippedLineBreak]
+
+
+-- ** Ignored Characters
+
+-- | An ignored character.
+ignoredCharacter :: (Pos p) => TexLexer [Lexeme p] p
+ignoredCharacter = do
+  state <- get
+  let cats = catCodes state
+      pos = position state
+  char <- satisfy' (isIgnoredChar cats)
+  let charText = Text.singleton char
+      charPos = getPosOf charText pos
+      newPos = getNextPos charText pos
+  put state{
+      position = newPos
+    }
+  return $ singleton Skipped{
+      sourceText = charText,
+      sourcePos = charPos
     }
 
 
@@ -422,7 +686,7 @@ catchInvalidCharAt :: (Pos p) => p -> TexLexer a p
 catchInvalidCharAt pos = do
   state <- get
   let cats = catCodes state
-  char <- satisfy $ isInvalidChar cats
+  char <- satisfy' $ isInvalidChar cats
   let charPos = getPosOf (Text.singleton char) pos
       err = InvalidChar char charPos
   customFailure err
@@ -431,6 +695,27 @@ catchInvalidCharAt pos = do
 -- (which is intended to be the position of that character) as a lexing error.
 catchInvalidChar :: (Pos p) => TexLexer a p
 catchInvalidChar = do
+  pos <- gets position
+  catchInvalidCharAt pos
+
+
+-- ** Unknown Characters
+
+-- | Catch an unknown character and report it together with a given position
+-- (which is intended to be the position of that character) as a lexing error.
+catchUnknownCharAt :: (Pos p) => p -> TexLexer a p
+catchUnknownCharAt pos = do
+  state <- get
+  let cats = catCodes state
+  char <- satisfy $ isUnknownChar cats
+  let charPos = getPosOf (Text.singleton char) pos
+      err = UnknownChar char charPos
+  customFailure err
+
+-- | Catch an unknown character and report it together with the current position
+-- (which is intended to be the position of that character) as a lexing error.
+catchUnknownChar :: (Pos p) => TexLexer a p
+catchUnknownChar = do
   pos <- gets position
   catchInvalidCharAt pos
 
@@ -472,5 +757,12 @@ doubleSuperscript pred = do
           pred $ (Char.chr . fromHex . Text.pack) [a, b]
         ]
       _ -> False
-
     isLowerHex c = Char.isDigit c || ('a' <= c && c <= 'f')
+
+
+-- * Helpers
+
+-- | A (possibly double-superscrip-escaped) character that satisfies a given
+-- predicate.
+satisfy' :: (Pos p) => (Char -> Bool) -> TexLexer Char p
+satisfy' pred = try (doubleSuperscript pred) <|> satisfy pred

@@ -7,10 +7,13 @@
 
 module Flex.Helpers (
   disjunction,
+  negation,
+  neitherNor,
   toHex,
   fromHex,
   codePoint,
-  singleton
+  singleton,
+  pair
 ) where
 
 import Data.Text.Lazy (Text)
@@ -20,6 +23,12 @@ import Data.Char qualified as Char
 -- | The disjunction of a list of predicates.
 disjunction :: [a -> Bool] -> a -> Bool
 disjunction ps x = foldr (\ p -> (||) (p x)) False ps
+
+negation :: (a -> Bool) -> a -> Bool
+negation p x = not (p x)
+
+neitherNor :: [a -> Bool] -> a -> Bool
+neitherNor ps x = foldr (\ p -> (&&) (not (p x))) True ps
 
 -- | Represent an integer as a hexadecimal number.
 toHex :: Int -> Text
@@ -71,3 +80,7 @@ codePoint c = "U+" <> (Text.justifyRight 4 '0' . toHex . Char.ord) c
 -- | A singleton list.
 singleton :: a -> [a]
 singleton x = [x]
+
+-- | A pair.
+pair :: a -> b -> (a, b)
+pair x y = (x, y)
