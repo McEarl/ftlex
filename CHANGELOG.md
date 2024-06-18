@@ -4,6 +4,8 @@
 
 * Relax version boundaries.
 
+* Add usage instructions for Cabal.
+
 
 ## v0.1.3
 
