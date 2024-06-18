@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.4
+
+* Relax version boundaries.
+
+
 ## v0.1.3
 
 * Move splitter to own module.
