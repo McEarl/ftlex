@@ -6,6 +6,8 @@
 
 * Add usage instructions for Cabal.
 
+* Fix line break handling in TeX lexer.
+
 
 ## v0.1.3
 

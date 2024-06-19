@@ -300,33 +300,66 @@ runLexer pos text state lineBreakType = do
   let newPos = position newState
       trailingSpacesPos = getPosOf trailingSpaces newPos
       newPos' = getNextPos trailingSpaces newPos
-      spaceLexeme = if Text.null trailingSpaces
-        then singleton Skipped{
+      spaceLexeme =
+        if Text.null trailingSpaces
+        then []
+        else singleton Skipped{
             sourceText = trailingSpaces,
             sourcePos = trailingSpacesPos
           }
-        else []
   -- Turn the line break into a line break character lexeme (or skip it if there
   -- is no @\\endline@ character):
   let lineBreakPos = getPosOf lineBreak newPos'
       newPos'' = getNextPos lineBreak newPos'
-      lineBreakLexeme = case endlineChar state of
-        Nothing -> singleton Skipped{
+      (lineBreakLexeme, newState') = case endlineChar state of
+        Nothing -> pair
+          Skipped{
             sourceText = lineBreak,
             sourcePos = lineBreakPos
           }
-        Just c -> singleton Character{
-            charContent = c,
-            charCatCode = EndOfLineCat,
-            sourceText = lineBreak,
-            sourcePos = lineBreakPos
+          newState{
+            position = newPos'
           }
-      newState' = newState{position = newPos''}
+        Just c -> case inputState newState of
+          -- In state N, i.e. if the line so far contained at most spaces, insert
+          -- a @\\par@ token:
+          NewLine -> pair
+            ControlWord{
+              ctrlWordContent = "par",
+              sourceText = lineBreak,
+              sourcePos = lineBreakPos
+            }
+            newState{
+              position = newPos',
+              inputState = NewLine
+            }
+          -- In state S, insert nothing:
+          SkippingSpaces -> pair
+            Skipped{
+              sourceText = lineBreak,
+              sourcePos = lineBreakPos
+            }
+            newState{
+              position = newPos',
+              inputState = NewLine
+            }
+          -- In state M, insert a space token:
+          MiddleOfLine -> pair
+            Character{
+              charContent = ' ', 
+              charCatCode = SpaceCat,
+              sourceText = lineBreak,
+              sourcePos = lineBreakPos
+            }
+            newState{
+              position = newPos',
+              inputState = NewLine
+            }
   -- Repeat the procedure for the remainder of the input text:
   restLexemes <- if Text.null rest
     then pure []
-    else runLexer newPos'' rest newState'{inputState = NewLine} lineBreakType
-  return $ lexemes ++ spaceLexeme ++ lineBreakLexeme ++ restLexemes
+    else runLexer newPos'' rest newState' lineBreakType
+  return $ lexemes ++ spaceLexeme ++ [lineBreakLexeme] ++ restLexemes
 
 
 -- * Lexer Combinators
