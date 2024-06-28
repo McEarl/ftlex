@@ -3,7 +3,7 @@ version: 0.2.2
 cabal-version: >= 1.10
 build-type: Simple
 license: LGPL-3
-license-file: LICENSE
+license-file: LICENSE.md
 copyright: (c) 2024 Marcel Schütz
 author: Marcel Schütz
 maintainer: marcel.schuetz@fau.de
@@ -20,6 +20,7 @@ description:
 extra-source-files:
   README.md
   CHANGELOG.md
+  LICENSE.md
 
 source-repository head
   type: git
