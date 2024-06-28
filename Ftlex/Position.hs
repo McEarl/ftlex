@@ -3,7 +3,7 @@
 --
 -- Position type class
 
-module Flex.Position (Pos(..)) where
+module Ftlex.Position (Pos(..)) where
 
 import Data.Text.Lazy (Text)
 

@@ -5,7 +5,7 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module Flex.Error (
+module Ftlex.Error (
   handleError
 ) where
 
@@ -14,8 +14,8 @@ import Data.Text.Lazy (Text)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.List.NonEmpty as NonEmpty
-import Flex.Message
-import Flex.Position
+import Ftlex.Message
+import Ftlex.Position
 
 
 -- | Report a lexing error.
@@ -37,7 +37,7 @@ unknownError :: (Pos p) => LocatedMsg p
 unknownError =
   let msg =
         "Unknown lexing error. " <>
-        "This is likely to be a bug in FLex. " <>
+        "This is likely to be a bug in FTLex. " <>
         "Please file an issue if it has not been reported yet."
       pos = noPos
   in (msg, pos)

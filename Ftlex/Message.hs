@@ -5,10 +5,10 @@
 
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Flex.Message (LocatedMsg, Msg(..)) where
+module Ftlex.Message (LocatedMsg, Msg(..)) where
 
 import Data.Text.Lazy (Text)
-import Flex.Position
+import Ftlex.Position
 
 
 type LocatedMsg p = (Text, p)

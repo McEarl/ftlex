@@ -1,5 +1,12 @@
 # Changelog
 
+
+## v0.2.1
+
+* Rename *FLex* to *FTLex* to avoid confusion with
+  [Flex](https://github.com/westes/flex).
+
+
 ## v0.2.0
 
 * Allow the default set of allowed characters in the input text (Basic Latin)

@@ -1,5 +1,5 @@
-name: flex
-version: 0.2.0
+name: ftlex
+version: 0.2.1
 cabal-version: >= 1.10
 build-type: Simple
 license: LGPL-3
@@ -8,8 +8,8 @@ copyright: (c) 2024 Marcel Schütz
 author: Marcel Schütz
 maintainer: marcel.schuetz@fau.de
 stability: experimental
-homepage: https://github.com/McEarl/FLex
-bug-reports: https://github.com/McEarl/FLex/issues
+homepage: https://github.com/McEarl/FTLex
+bug-reports: https://github.com/McEarl/FTLex/issues
 category: ForTheL, CNL, Lexing
 synopsis: A generic ForTheL lexer
 description:
@@ -23,19 +23,19 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/McEarl/FLex.git
+  location: https://github.com/McEarl/FTLex.git
   branch: main
 
 library
   exposed-modules:
-    Flex.Base
-    Flex.Ftl
-    Flex.Message
-    Flex.Position
-    Flex.Tex
+    Ftlex.Base
+    Ftlex.Ftl
+    Ftlex.Message
+    Ftlex.Position
+    Ftlex.Tex
   other-modules:
-    Flex.Error
-    Flex.Helpers
+    Ftlex.Error
+    Ftlex.Helpers
   build-depends:
     base >= 4.17.2.1 && <= 4.19.1.0,
     containers >= 0.6.7 && <= 0.6.8,

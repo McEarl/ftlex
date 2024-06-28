@@ -1,4 +1,4 @@
-# FLex
+# FTLex – Formula Theory Lexer
 
 This is a library that provides an abstract ForTheL lexer that is independent
 of concrete character encodings, position types, syntax highlighting
@@ -11,7 +11,7 @@ ForTheL parsing frameworks.
 ### Cabal
 
 1.  * If you already have a file called `cabal.project` in your project directory,
-      add `https://github.com/McEarl/FLex/releases/download/v0.2.0/flex-0.2.0.tar.gz`
+      add `https://github.com/McEarl/FTLex/releases/download/v0.2.0/ftlex-0.2.0.tar.gz`
       to `packages` there.
 
     * Otherwise, create a new file `cabal.project` that contains the following lines:
@@ -19,18 +19,18 @@ ForTheL parsing frameworks.
       ```cabal
       packages:
         ./*.cabal
-        https://github.com/McEarl/FLex/releases/download/v0.2.0/flex-0.2.0.tar.gz
+        https://github.com/McEarl/FTLex/releases/download/v0.2.0/ftlex-0.2.0.tar.gz
       ```
 
-2.  Add `flex` to `build-depends` in your `<package name>.cabal`.
+2.  Add `ftlex` to `build-depends` in your `<package name>.cabal`.
 
 
 ### Stack
 
-1.  Add `https://github.com/McEarl/FLex/releases/download/v0.2.0/flex-0.2.0.tar.gz`
+1.  Add `https://github.com/McEarl/FTLex/releases/download/v0.2.0/ftlex-0.2.0.tar.gz`
     to `extra-deps` in your `stack.yaml`.
 
-2.  Add `flex` to `dependencies` in your `package.yaml`.
+2.  Add `ftlex` to `dependencies` in your `package.yaml`.
 
 
 ## Expected Format of Input Texts

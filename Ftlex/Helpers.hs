@@ -5,7 +5,7 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module Flex.Helpers (
+module Ftlex.Helpers (
   disjunction,
   negation,
   neitherNor,

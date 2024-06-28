@@ -5,7 +5,7 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module Flex.Ftl (
+module Ftlex.Ftl (
   CatCode(..),
   CatCodeMap,
   defaultCatCodes,
@@ -23,12 +23,12 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Flex.Position
-import Flex.Error
-import Flex.Message
-import Flex.Base (LineBreakType(..), UnicodeBlock(..))
-import Flex.Base qualified as Base
-import Flex.Helpers
+import Ftlex.Position
+import Ftlex.Error
+import Ftlex.Message
+import Ftlex.Base (LineBreakType(..), UnicodeBlock(..))
+import Ftlex.Base qualified as Base
+import Ftlex.Helpers
 
 
 -- * Category Codes

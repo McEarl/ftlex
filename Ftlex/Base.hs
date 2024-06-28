@@ -5,7 +5,7 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module Flex.Base (
+module Ftlex.Base (
   Lexer,
   runLexer,
   LineBreakType(..),
