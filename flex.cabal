@@ -1,5 +1,5 @@
 name: flex
-version: 0.1.4
+version: 0.2.0
 cabal-version: >= 1.10
 build-type: Simple
 license: LGPL-3
@@ -28,13 +28,12 @@ source-repository head
 
 library
   exposed-modules:
+    Flex.Base
     Flex.Ftl
     Flex.Message
     Flex.Position
-    Flex.Split
     Flex.Tex
   other-modules:
-    Flex.Base
     Flex.Error
     Flex.Helpers
   build-depends:

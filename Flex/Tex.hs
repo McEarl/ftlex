@@ -19,18 +19,22 @@ import Data.Text.Lazy qualified as Text
 import Control.Monad.State.Class (get, put, gets)
 import Text.Megaparsec hiding (Pos)
 import Data.Char qualified as Char
+import Data.Set (Set)
+import Data.Set qualified as Set
+import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isNothing, fromMaybe)
 import Flex.Position
 import Flex.Error
 import Flex.Message
+import Flex.Base (LineBreakType(..), UnicodeBlock(..))
 import Flex.Base qualified as Base
 import Flex.Helpers
-import Flex.Split
 
 
 -- * Category Codes
 
+-- | Category Codes.
 data CatCode =
     EscapeCharCat     -- ^  0: Escape character
   | BeginGroupCat     -- ^  1: Begin group character
@@ -51,7 +55,9 @@ data CatCode =
   | UnknownCat        -- ^     Unknown character
   deriving Eq
 
-type CatCodeMap = Map.Map Char CatCode
+-- | A map that assigns a character a category code. Any character not contained
+-- in that map is supposed to throw an "unknown character" error during lexing.
+type CatCodeMap = Map Char CatCode
 
 -- | Checks whether a character is an escape character wrt. a given category
 -- code mapping (default: @\\@).
@@ -156,30 +162,78 @@ isUnknownChar :: CatCodeMap -> Char -> Bool
 isUnknownChar catCodeMap c = isNothing (Map.lookup c catCodeMap)
 
 -- | Default category code mapping for TeX documents.
-defaultCatCodes :: CatCodeMap
-defaultCatCodes = Map.fromAscList [(c, initCatCode c) | c <- ['\NUL' .. '\DEL']]
+defaultCatCodes :: Set UnicodeBlock -> CatCodeMap
+defaultCatCodes blocks = 
+  let blocksWithBasicLatin = Set.insert BasicLatin blocks
+  in Map.fromAscList [(c, defCatCode c) |
+      c <- concatMap Base.charsOf (Set.toList blocksWithBasicLatin),
+      c `isInSomeBlockOf` blocksWithBasicLatin
+    ]
   where
-    initCatCode :: Char -> CatCode
-    initCatCode '\\' = EscapeCharCat
-    initCatCode '{' = BeginGroupCat
-    initCatCode '}' = EndGroupCat
-    initCatCode '$' = MathShiftCat
-    initCatCode '&' = AlignTabCat
-    initCatCode '\r' = EndOfLineCat
-    initCatCode '#' = ParamCharCat
-    initCatCode '^' = SuperscriptCat
-    initCatCode '_' = SubscriptCat
-    initCatCode '\NUL' = IgnoredCat
-    initCatCode ' ' = SpaceCat
-    initCatCode c
-      | Char.isAsciiUpper c = LetterCat
-      | Char.isAsciiLower c = LetterCat
-    initCatCode '~' = ActiveCat
-    initCatCode '%' = CommentPrefixCat
-    initCatCode c
-      | c < '\DEL' = OtherCat
-    initCatCode '\DEL' = InvalidCat
-    initCatCode _ = UnknownCat
+    isInSomeBlockOf c = not . Set.null . Set.filter (Base.isInUnicodeBlock c)
+
+-- | The default category code of a character.
+defCatCode :: Char -> CatCode
+defCatCode '\x005C' = EscapeCharCat     -- '\\'
+defCatCode '\x007B' = BeginGroupCat     -- '{'
+defCatCode '\x007D' = EndGroupCat       -- '}'
+defCatCode '\x0024' = MathShiftCat      -- '$'
+defCatCode '\x0026' = AlignTabCat       -- '&'
+defCatCode '\x000D' = EndOfLineCat      -- Carriage Return
+defCatCode '\x0023' = ParamCharCat      -- '#'
+defCatCode '\x005E' = SuperscriptCat    -- '^'
+defCatCode '\x005F' = SubscriptCat      -- '_'
+defCatCode '\x0000' = IgnoredCat        -- Null Character
+defCatCode c
+  | isDefSpace c = SpaceCat
+  | isDefLetter c = LetterCat
+  | isDefOther c = OtherCat
+defCatCode '\x007E' = ActiveCat         -- '~'
+defCatCode '\x0025' = CommentPrefixCat  -- '%'
+defCatCode _ = InvalidCat
+
+-- | Default space characters.
+isDefSpace :: Char -> Bool
+isDefSpace c = elem c $
+     ['\x0020']  -- Space
+  -- Latin-1 Supplement:
+  ++ ['\x00A0'] -- Non-breakable space
+
+-- | Default alphanumeric characters.
+isDefLetter :: Char -> Bool
+isDefLetter c = elem c $
+  -- Basic Latin:
+     ['\x0041' .. '\x005A'] -- 'A' – 'Z'
+  ++ ['\x0061' .. '\x007A'] -- 'a' – 'z'
+  -- Latin-1 Supplement:
+  ++ ['\x00C0' .. '\x00D6'] -- 'À' – 'Ö'
+  ++ ['\x00D8' .. '\x00F6'] -- 'Ø' – 'ö'
+  ++ ['\x00F8' .. '\x00FF'] -- 'ø' – 'ÿ'
+  -- Latin Extended-A:
+  ++ ['\x0100' .. '\x017F'] -- All of Latin Extended-A
+  -- Latin Extended-B:
+  ++ ['\x0180' .. '\x024F'] -- All of Latin Extended-B
+  -- IPA Extensions:
+  ++ ['\x0250' .. '\x02AF'] -- All of IPA Extensions
+
+-- | Default other characters.
+isDefOther :: Char -> Bool
+isDefOther c = elem c $
+  -- Basic Latin:
+     ['\x0001' .. '\x000C'] -- C0 Controls (before Carriage Return)
+  ++ ['\x000E' .. '\x001F'] -- C0 Controls (after Carriage Return)
+  ++ ['\x0021' .. '\x0022'] -- '!' – '"'
+  ++ ['\x0027' .. '\x002F'] -- '\'' – '/'
+  ++ ['\x0030' .. '\x0039'] -- '0' – '9'
+  ++ ['\x003A' .. '\x0040'] -- ':' – '@'
+  ++ ['\x005B']             -- '['
+  ++ ['\x005D' .. '\x0060'] -- ']' – '`'
+  ++ ['\x007C']             -- '|'
+  -- Latin-1 Supplement:
+  ++ ['\x0080' .. '\x00BF'] -- C1 Controls 
+  ++ ['\x00A1' .. '\x00F6'] -- '¡' – '¿'
+  ++ ['\x00D7']             -- '×'
+  ++ ['\x00F7']             -- '÷'
 
 
 -- * Lexemes
@@ -229,7 +283,7 @@ data (Pos p) => Lexeme p =
 -- | A lexing error.
 data (Pos p) => LexingError p =
     InvalidChar Char p
-  | UnknownChar Char p
+  | UnknownChar Char p (Set UnicodeBlock)
   deriving (Eq, Ord)
 
 -- | Turn an error into a located error 
@@ -237,8 +291,10 @@ makeErrMsg :: (Pos p) => LexingError p -> LocatedMsg p
 makeErrMsg (InvalidChar char pos) =
   let msg = "Invalid character " <> codePoint char <> "."
   in (msg, pos)
-makeErrMsg (UnknownChar char pos) =
-  let msg = "Unknown character " <> codePoint char <> "."
+makeErrMsg (UnknownChar char pos blocks) =
+  let msg = "Unknown character " <> codePoint char <> ".\n" <>
+            "Only characters from the following Unicode blocks are allowed: " <>
+            Base.showCodeBlocks (Set.insert BasicLatin blocks)
   in (msg, pos)
 
 
@@ -262,17 +318,20 @@ data (Pos p) => LexingState p = LexingState{
     -- ^ Current category codes
     inputState :: InputState,
     -- ^ Current input state
-    endlineChar :: Maybe Char
+    endlineChar :: Maybe Char,
     -- ^ Current value of @\\endlinechar@
+    unicodeBlocks :: Set UnicodeBlock
+    -- ^ Unicode blocks whose characters are allowed in the input text
   }
 
 -- | The initial lexing state.
-initState :: (Pos p) => p -> LexingState p
-initState pos = LexingState{
+initState :: (Pos p) => p -> Set UnicodeBlock -> LexingState p
+initState pos blocks = LexingState{
     position = pos,
-    catCodes = defaultCatCodes,
+    catCodes = defaultCatCodes blocks,
     inputState = NewLine,
-    endlineChar = Just '\r'
+    endlineChar = Just '\r',
+    unicodeBlocks = blocks
   }
 
 
@@ -284,82 +343,85 @@ runLexer :: (Msg p m)
          -> LexingState p -- ^ Lexing state
          -> LineBreakType -- ^ Line break type
          -> m [Lexeme p]
-runLexer pos text state lineBreakType = do
-  -- Split the input text at the first linebreak:
-  let (line, lineBreak, rest) = splitText lineBreakType text
-  -- Remove all trailing spaces from the first line:
-  let trimmedLine = Text.dropWhileEnd (isSpace (catCodes state)) line
-      trailingSpaces = Text.takeWhileEnd (isSpace (catCodes state)) line
-  -- Lex the first line of the input text:
-  (lexemes, newState) <- Base.runLexer
-    texLine
-    state{inputState = NewLine}
-    trimmedLine
-    (handleError makeErrMsg)
-  -- Skip the trailing spaces:
-  let newPos = position newState
-      trailingSpacesPos = getPosOf trailingSpaces newPos
-      newPos' = getNextPos trailingSpaces newPos
-      spaceLexeme =
-        if Text.null trailingSpaces
-        then []
-        else singleton Skipped{
-            sourceText = trailingSpaces,
-            sourcePos = trailingSpacesPos
-          }
-  -- Turn the line break into a line break character lexeme (or skip it if there
-  -- is no @\\endline@ character):
-  let lineBreakPos = getPosOf lineBreak newPos'
-      newPos'' = getNextPos lineBreak newPos'
-      (lineBreakLexeme, newState') = case endlineChar state of
-        Nothing -> pair
-          Skipped{
-            sourceText = lineBreak,
-            sourcePos = lineBreakPos
-          }
-          newState{
-            position = newPos'
-          }
-        Just c -> case inputState newState of
-          -- In state N, i.e. if the line so far contained at most spaces, insert
-          -- a @\\par@ token:
-          NewLine -> pair
-            ControlWord{
-              ctrlWordContent = "par",
-              sourceText = lineBreak,
-              sourcePos = lineBreakPos
-            }
-            newState{
-              position = newPos',
-              inputState = NewLine
-            }
-          -- In state S, insert nothing:
-          SkippingSpaces -> pair
-            Skipped{
-              sourceText = lineBreak,
-              sourcePos = lineBreakPos
-            }
-            newState{
-              position = newPos',
-              inputState = NewLine
-            }
-          -- In state M, insert a space token:
-          MiddleOfLine -> pair
-            Character{
-              charContent = ' ', 
-              charCatCode = SpaceCat,
-              sourceText = lineBreak,
-              sourcePos = lineBreakPos
-            }
-            newState{
-              position = newPos',
-              inputState = NewLine
-            }
-  -- Repeat the procedure for the remainder of the input text:
-  restLexemes <- if Text.null rest
-    then pure []
-    else runLexer newPos'' rest newState' lineBreakType
-  return $ lexemes ++ spaceLexeme ++ [lineBreakLexeme] ++ restLexemes
+runLexer pos text state lineBreakType =
+  runLexer' pos (Base.removeBom text) state lineBreakType
+  where
+    runLexer' pos text state lineBreakType = do
+      -- Split the input text at the first linebreak:
+      let (line, lineBreak, rest) = Base.splitText lineBreakType text
+      -- Remove all trailing spaces from the first line:
+      let trimmedLine = Text.dropWhileEnd (isSpace (catCodes state)) line
+          trailingSpaces = Text.takeWhileEnd (isSpace (catCodes state)) line
+      -- Lex the first line of the input text:
+      (lexemes, newState) <- Base.runLexer
+        texLine
+        state{inputState = NewLine}
+        trimmedLine
+        (handleError makeErrMsg)
+      -- Skip the trailing spaces:
+      let newPos = position newState
+          trailingSpacesPos = getPosOf trailingSpaces newPos
+          newPos' = getNextPos trailingSpaces newPos
+          spaceLexeme =
+            if Text.null trailingSpaces
+            then []
+            else singleton Skipped{
+                sourceText = trailingSpaces,
+                sourcePos = trailingSpacesPos
+              }
+      -- Turn the line break into a line break character lexeme (or skip it if there
+      -- is no @\\endline@ character):
+      let lineBreakPos = getPosOf lineBreak newPos'
+          newPos'' = getNextPos lineBreak newPos'
+          (lineBreakLexeme, newState') = case endlineChar state of
+            Nothing -> pair
+              Skipped{
+                sourceText = lineBreak,
+                sourcePos = lineBreakPos
+              }
+              newState{
+                position = newPos'
+              }
+            Just c -> case inputState newState of
+              -- In state N, i.e. if the line so far contained at most spaces, insert
+              -- a @\\par@ token:
+              NewLine -> pair
+                ControlWord{
+                  ctrlWordContent = "par",
+                  sourceText = lineBreak,
+                  sourcePos = lineBreakPos
+                }
+                newState{
+                  position = newPos',
+                  inputState = NewLine
+                }
+              -- In state S, insert nothing:
+              SkippingSpaces -> pair
+                Skipped{
+                  sourceText = lineBreak,
+                  sourcePos = lineBreakPos
+                }
+                newState{
+                  position = newPos',
+                  inputState = NewLine
+                }
+              -- In state M, insert a space token:
+              MiddleOfLine -> pair
+                Character{
+                  charContent = ' ', 
+                  charCatCode = SpaceCat,
+                  sourceText = lineBreak,
+                  sourcePos = lineBreakPos
+                }
+                newState{
+                  position = newPos',
+                  inputState = NewLine
+                }
+      -- Repeat the procedure for the remainder of the input text:
+      restLexemes <- if Text.null rest
+        then pure []
+        else runLexer newPos'' rest newState' lineBreakType
+      return $ lexemes ++ spaceLexeme ++ [lineBreakLexeme] ++ restLexemes
 
 
 -- * Lexer Combinators
@@ -740,9 +802,10 @@ catchUnknownCharAt :: (Pos p) => p -> TexLexer a p
 catchUnknownCharAt pos = do
   state <- get
   let cats = catCodes state
-  char <- satisfy $ isUnknownChar cats
+      blocks = unicodeBlocks state
+  char <- satisfy $ \c -> Map.notMember c cats
   let charPos = getPosOf (Text.singleton char) pos
-      err = UnknownChar char charPos
+      err = UnknownChar char charPos blocks
   customFailure err
 
 -- | Catch an unknown character and report it together with the current position
@@ -750,7 +813,7 @@ catchUnknownCharAt pos = do
 catchUnknownChar :: (Pos p) => TexLexer a p
 catchUnknownChar = do
   pos <- gets position
-  catchInvalidCharAt pos
+  catchUnknownCharAt pos
 
 
 -- ** Double-superscript-escaped characters

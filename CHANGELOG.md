@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.2.0
+
+* Allow the default set of allowed characters in the input text (Basic Latin)
+  to be extended by the following Unicode blocks:
+
+  - Latin-1 Supplement
+  - Latin Extended-A
+  - Latin Extended-B
+  - IPA Extensions
+
+* Ignore a BOM at the beginning of an input text.
+
+* Merge the module `Flex.Split` into `Flex.Base`.
+
+
 ## v0.1.4
 
 * Relax version boundaries.

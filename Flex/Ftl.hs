@@ -19,19 +19,21 @@ import Data.Text.Lazy (Text)
 import Data.Text.Lazy qualified as Text
 import Control.Monad.State.Class (get, put, gets)
 import Text.Megaparsec hiding (Pos)
-import Data.Char qualified as Char
+import Data.Set (Set)
+import Data.Set qualified as Set
+import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (isNothing)
 import Flex.Position
 import Flex.Error
 import Flex.Message
+import Flex.Base (LineBreakType(..), UnicodeBlock(..))
 import Flex.Base qualified as Base
 import Flex.Helpers
-import Flex.Split
 
 
 -- * Category Codes
 
+-- | TeX-like Category codes.
 data CatCode =
     SpaceCat          -- ^ Horizontal space
   | AlphaNumCat       -- ^ Alphanumeric charcter
@@ -40,7 +42,9 @@ data CatCode =
   | InvalidCat        -- ^ Invalid character
   deriving Eq
 
-type CatCodeMap = Map.Map Char CatCode
+-- | A map that assigns a character a category code. Any character not contained
+-- in that map is supposed to throw an "unknown character" error during lexing.
+type CatCodeMap = Map Char CatCode
 
 -- | Checks whether a character is a space wrt. a given category code mapping.
 isSpace :: CatCodeMap -> Char -> Bool
@@ -68,27 +72,68 @@ isCommentChar catCodeMap c =
 isInvalidChar :: CatCodeMap -> Char -> Bool
 isInvalidChar catCodeMap c =
      Map.lookup c catCodeMap == Just InvalidCat
-  || isNothing (Map.lookup c catCodeMap)
+
+
+-- * Default Category Codes
 
 -- | Default category code mapping for FTL documents.
-defaultCatCodes :: CatCodeMap
-defaultCatCodes = Map.fromAscList
-  [(c, initCatCode c) | c <- ['\NUL' .. '\DEL']]
+defaultCatCodes :: Set UnicodeBlock -> CatCodeMap
+defaultCatCodes blocks =
+  let blocksWithBasicLatin = Set.insert BasicLatin blocks
+  in Map.fromAscList [(c, defCatCode c) |
+      c <- concatMap Base.charsOf (Set.toList blocksWithBasicLatin),
+      c `isInSomeBlockOf` blocksWithBasicLatin
+    ]
   where
-    initCatCode :: Char -> CatCode
-    initCatCode ' ' = SpaceCat
-    initCatCode c
-      | Char.isAsciiUpper c = AlphaNumCat
-      | Char.isAsciiLower c = AlphaNumCat
-      | Char.isDigit c = AlphaNumCat
-    initCatCode c
-      | '\x21' <= c && c <= '\x22' = SymbolCat -- ! "
-      | '\x24' <= c && c <= '\x2f' = SymbolCat -- $ % & ' ( ) * + , - . /
-      | '\x3a' <= c && c <= '\x40' = SymbolCat -- : ; < = > ? @
-      | '\x5b' <= c && c <= '\x60' = SymbolCat -- [ \ ] ^ _ `
-      | '\x7b' <= c && c <= '\x7e' = SymbolCat -- { | } ~
-    initCatCode '#' = CommentPrefixCat
-    initCatCode _ = InvalidCat
+    isInSomeBlockOf c = not . Set.null . Set.filter (Base.isInUnicodeBlock c)
+
+-- | The default category code of a character.
+defCatCode :: Char -> CatCode
+defCatCode c
+  | isDefSpace c = SpaceCat
+  | isDefAlphaNum c = AlphaNumCat
+  | isDefSymbol c = SymbolCat
+defCatCode '\x0023' = CommentPrefixCat  -- '#'
+defCatCode _ = InvalidCat
+
+-- | Default space characters.
+isDefSpace :: Char -> Bool
+isDefSpace c = elem c $
+     ['\x0020']  -- Space
+  -- Latin-1 Supplement:
+  ++ ['\x00A0'] -- Non-breakable space
+
+-- | Default alphanumeric characters.
+isDefAlphaNum :: Char -> Bool
+isDefAlphaNum c = elem c $
+  -- Basic Latin:
+     ['\x0041' .. '\x005A'] -- 'A' – 'Z'
+  ++ ['\x0061' .. '\x007A'] -- 'a' – 'z'
+  ++ ['\x0030' .. '\x0039'] -- '0' – '9'
+  -- Latin-1 Supplement:
+  ++ ['\x00C0' .. '\x00D6'] -- 'À' – 'Ö'
+  ++ ['\x00D8' .. '\x00F6'] -- 'Ø' – 'ö'
+  ++ ['\x00F8' .. '\x00FF'] -- 'ø' – 'ÿ'
+  -- Latin Extended-A:
+  ++ ['\x0100' .. '\x017F'] -- All of Latin Extended-A
+  -- Latin Extended-B:
+  ++ ['\x0180' .. '\x024F'] -- All of Latin Extended-B
+  -- IPA Extensions:
+  ++ ['\x0250' .. '\x02AF'] -- All of IPA Extensions
+
+-- | Default symbol characters.
+isDefSymbol :: Char -> Bool
+isDefSymbol c = elem c $
+  -- Basic Latin:
+     ['\x0021' .. '\x0022'] -- '!' – '"'
+  ++ ['\x0024' .. '\x002F'] -- '$' – '/'
+  ++ ['\x003A' .. '\x0040'] -- ':' – '@'
+  ++ ['\x005B' .. '\x0060'] -- '[' – '`'
+  ++ ['\x007B' .. '\x007E'] -- '{' – '~'
+  -- Latin-1 Supplement:
+  ++ ['\x00A1' .. '\x00BF'] -- '¡' – '¿'
+  ++ ['\x00D7']             -- '×'
+  ++ ['\x00F7']             -- '÷'
 
 
 -- * Lexemes
@@ -120,12 +165,18 @@ data (Pos p) => Lexeme p =
 -- | A lexing error.
 data (Pos p) => LexingError p =
     InvalidChar Char p
+  | UnknownChar Char p (Set UnicodeBlock)
   deriving (Eq, Ord)
 
 -- | Turn an error into a located error 
 makeErrMsg :: (Pos p) => LexingError p -> LocatedMsg p
 makeErrMsg (InvalidChar char pos) =
   let msg = "Invalid character " <> codePoint char <> "."
+  in (msg, pos)
+makeErrMsg (UnknownChar char pos blocks) =
+  let msg = "Unknown character " <> codePoint char <> ".\n" <>
+            "Only characters from the following Unicode blocks are allowed: " <>
+            Base.showCodeBlocks (Set.insert BasicLatin blocks)
   in (msg, pos)
 
 
@@ -140,14 +191,17 @@ type FtlLexer resultType p = Base.Lexer (LexingError p) (LexingState p) resultTy
 data (Pos p) => LexingState p = LexingState{
     position :: p,
     -- ^ Current position
-    catCodes :: CatCodeMap
+    catCodes :: CatCodeMap,
     -- ^ Current category codes
+    unicodeBlocks :: Set UnicodeBlock
+    -- ^ Unicode blocks whose characters are allowed in the input text
   }
 
-initState :: (Pos p) => p -> LexingState p
-initState pos = LexingState{
+initState :: (Pos p) => p -> Set UnicodeBlock -> LexingState p
+initState pos blocks = LexingState{
     position = pos,
-    catCodes = defaultCatCodes
+    catCodes = defaultCatCodes blocks,
+    unicodeBlocks = blocks
   }
 
 
@@ -159,29 +213,32 @@ runLexer :: (Msg p m)
          -> LexingState p -- ^ Lexing state
          -> LineBreakType -- ^ Line break type
          -> m [Lexeme p]
-runLexer pos text state lineBreakType = do
-  -- Split the input text at the first linebreak:
-  let (line, lineBreak, rest) = splitText lineBreakType text
-  -- Lex the first line of the input text:
-  (lexemes, newState) <- Base.runLexer
-    ftlLine
-    state
-    line
-    (handleError makeErrMsg)
-  -- Turn the line break into a space lexeme:
-  let newPos = position newState
-      lineBreakPos = getPosOf lineBreak newPos
-      newPos' = getNextPos lineBreak newPos
-      lineBreakLexeme = singleton Space{
-          sourceText = lineBreak,
-          sourcePos = lineBreakPos
-        }
-      newState' = newState{position = newPos'}
-  -- Repeat the procedure for the remainder of the input text:
-  restLexemes <- if Text.null rest
-    then pure []
-    else runLexer newPos' rest newState' lineBreakType
-  return $ lexemes ++ lineBreakLexeme ++ restLexemes
+runLexer pos text state lineBreakType =
+  runLexer' pos (Base.removeBom text) state lineBreakType
+  where
+    runLexer' pos text state lineBreakType = do
+      -- Split the input text at the first linebreak:
+      let (line, lineBreak, rest) = Base.splitText lineBreakType text
+      -- Lex the first line of the input text:
+      (lexemes, newState) <- Base.runLexer
+        ftlLine
+        state
+        line
+        (handleError makeErrMsg)
+      -- Turn the line break into a space lexeme:
+      let newPos = position newState
+          lineBreakPos = getPosOf lineBreak newPos
+          newPos' = getNextPos lineBreak newPos
+          lineBreakLexeme = singleton Space{
+              sourceText = lineBreak,
+              sourcePos = lineBreakPos
+            }
+          newState' = newState{position = newPos'}
+      -- Repeat the procedure for the remainder of the input text:
+      restLexemes <- if Text.null rest
+        then pure []
+        else runLexer newPos' rest newState' lineBreakType
+      return $ lexemes ++ lineBreakLexeme ++ restLexemes
 
 
 -- * Lexer Combinators
@@ -194,7 +251,8 @@ ftlLine = do
       space,
       word,
       symbol,
-      catchInvalidChar
+      catchInvalidChar,
+      catchUnknownChar
     ]
   eof
   state <- get
@@ -304,3 +362,22 @@ catchInvalidChar :: (Pos p) => FtlLexer a p
 catchInvalidChar = do
   pos <- gets position
   catchInvalidCharAt pos
+
+-- | Catch an unknown character and report it together with a given position
+-- (which is intended to be the position of that character) as a lexing error.
+catchUnknownCharAt :: (Pos p) => p -> FtlLexer a p
+catchUnknownCharAt pos = do
+  state <- get
+  let cats = catCodes state
+      blocks = unicodeBlocks state
+  char <- satisfy $ \c -> Map.notMember c cats
+  let charPos = getPosOf (Text.singleton char) pos
+      err = UnknownChar char charPos blocks
+  customFailure err
+
+-- | Catch an unknown character and report it together with the current position
+-- (which is intended to be the position of that character) as a lexing error.
+catchUnknownChar :: (Pos p) => FtlLexer a p
+catchUnknownChar = do
+  pos <- gets position
+  catchUnknownCharAt pos
