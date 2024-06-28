@@ -1,5 +1,5 @@
 name: ftlex
-version: 0.2.1
+version: 0.2.2
 cabal-version: >= 1.10
 build-type: Simple
 license: LGPL-3
@@ -29,6 +29,7 @@ source-repository head
 library
   exposed-modules:
     Ftlex.Base
+    Ftlex.Debug
     Ftlex.Ftl
     Ftlex.Message
     Ftlex.Position

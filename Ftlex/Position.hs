@@ -16,3 +16,5 @@ class (Ord p) => Pos p where
   getPosOf :: Text -> p -> p
   -- ^ Take a string together with its starting position and return the position
   -- of the whole string
+  showPos :: p -> Text
+  -- ^ Show a position
