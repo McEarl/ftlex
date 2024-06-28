@@ -1,5 +1,8 @@
 -- |
--- Creator: Marcel Schütz (2024)
+-- Module      : Ftlex.Error
+-- Copyright   : (c) 2024, Marcel Schütz
+-- License     : LGPL-3
+-- Maintainer  : marcel.schuetz@fau.de
 --
 -- Lexing errors.
 
