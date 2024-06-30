@@ -1,14 +1,12 @@
 -- |
--- Module      : Ftlex.Error
+-- Module      : FTLex.Error
 -- Copyright   : (c) 2024, Marcel Schütz
 -- License     : LGPL-3
 -- Maintainer  : marcel.schuetz@fau.de
 --
 -- Lexing errors.
 
-{-# LANGUAGE OverloadedStrings #-}
-
-module Ftlex.Error (
+module FTLex.Error (
   handleError
 ) where
 
@@ -17,8 +15,8 @@ import Data.Text (Text)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.List.NonEmpty as NonEmpty
-import Ftlex.Message
-import Ftlex.Position
+import FTLex.Message
+import FTLex.Position
 
 
 -- | Report a lexing error.

@@ -1,14 +1,12 @@
 -- |
--- Module      : Ftlex.Base
+-- Module      : FTLex.Base
 -- Copyright   : (c) 2024, Marcel Schütz
 -- License     : LGPL-3
 -- Maintainer  : marcel.schuetz@fau.de
 --
 -- Abstract lexer type.
 
-{-# LANGUAGE OverloadedStrings #-}
-
-module Ftlex.Base (
+module FTLex.Base (
   Lexer,
   runLexer,
   Encoding(..),

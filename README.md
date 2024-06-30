@@ -33,7 +33,7 @@ ForTheL parsing frameworks.
 2.  Add `ftlex` to `dependencies` in your `package.yaml`.
 
 
-## Expected Format of Input Texts
+## Supported Formats of Input Texts
 
 * The following character encodings are supported for the input text:
 
@@ -56,3 +56,36 @@ ForTheL parsing frameworks.
   - Latin Extended-A
   - Latin Extended-B
   - IPA Extensions
+
+
+## Development
+
+### Running the Test Suites
+
+To run the test suites of this package, execute the following commands:
+
+```
+cabal configure --enable-tests
+cabal build
+cabal test --test-options="<file> <lexer> <character encoding> <line break type>" --test-show-details=streaming
+```
+
+The arguments passed to `cabal test` by `--test-options` are:
+
+* `<file>` is the input file whose content will be lexed
+* `<lexer>` = `FTL` | `TEX`
+* `<character encoding>` = `UTF-8` | `UTF-16-LE` | `UTF-16-BE` | `UTF-32-LE` | `UTF-32-BE`
+* `<line break type>` = `CR` | `LF` | `CRLF`
+
+(Note: The option `--test-show-details=streaming` is necessary to allow user
+interaction during a test run.)
+
+
+### Generating a Source Distribution File
+
+To generate a tarball of this package – which will be located at
+`dist-newstyle/sdist/ftlex-0.3.0.tar.gz` – simply execute the following command:
+
+```
+cabal sdist
+```

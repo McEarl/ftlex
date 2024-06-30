@@ -1,14 +1,12 @@
 -- |
--- Module      : Ftlex.Debug
+-- Module      : FTLex.Debug
 -- Copyright   : (c) 2024, Marcel Schütz
 -- License     : LGPL-3
 -- Maintainer  : marcel.schuetz@fau.de
 --
 -- Debugging output.
 
-{-# LANGUAGE OverloadedStrings #-}
-
-module Ftlex.Debug (
+module FTLex.Debug (
   showFtlLexemes,
   showTexLexemes
 ) where
@@ -16,9 +14,9 @@ module Ftlex.Debug (
 import Prelude hiding (showChar)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Ftlex.Ftl qualified as FTL
-import Ftlex.Tex qualified as TEX
-import Ftlex.Position
+import FTLex.Ftl qualified as FTL
+import FTLex.Tex qualified as TEX
+import FTLex.Position
 
 
 -- * FTL

@@ -1,14 +1,12 @@
 -- |
--- Module      : Ftlex.Ftl
+-- Module      : FTLex.Ftl
 -- Copyright   : (c) 2024, Marcel Schütz
 -- License     : LGPL-3
 -- Maintainer  : marcel.schuetz@fau.de
 --
 -- FTL Lexer
 
-{-# LANGUAGE OverloadedStrings #-}
-
-module Ftlex.Ftl (
+module FTLex.Ftl (
   CatCode(..),
   CatCodeMap,
   defaultCatCodes,
@@ -27,12 +25,12 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Ftlex.Position
-import Ftlex.Error
-import Ftlex.Message
-import Ftlex.Base (LineBreakType(..), UnicodeBlock(..))
-import Ftlex.Base qualified as Base
-import Ftlex.Helpers
+import FTLex.Position
+import FTLex.Error
+import FTLex.Message
+import FTLex.Base (LineBreakType(..), UnicodeBlock(..))
+import FTLex.Base qualified as Base
+import FTLex.Helpers
 
 
 -- * Category Codes

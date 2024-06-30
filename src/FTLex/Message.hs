@@ -1,17 +1,15 @@
 -- |
--- Module      : Ftlex.Message
+-- Module      : FTLex.Message
 -- Copyright   : (c) 2024, Marcel Schütz
 -- License     : LGPL-3
 -- Maintainer  : marcel.schuetz@fau.de
 --
 -- Message type class
 
-{-# LANGUAGE MultiParamTypeClasses #-}
-
-module Ftlex.Message (LocatedMsg, Msg(..)) where
+module FTLex.Message (LocatedMsg, Msg(..)) where
 
 import Data.Text (Text)
-import Ftlex.Position
+import FTLex.Position
 
 
 type LocatedMsg p = (Text, p)

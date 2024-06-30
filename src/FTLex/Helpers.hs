@@ -1,14 +1,12 @@
 -- |
--- Module      : Ftlex.Helpers
+-- Module      : FTLex.Helpers
 -- Copyright   : (c) 2024, Marcel Schütz
 -- License     : LGPL-3
 -- Maintainer  : marcel.schuetz@fau.de
 --
 -- Helpers.
 
-{-# LANGUAGE OverloadedStrings #-}
-
-module Ftlex.Helpers (
+module FTLex.Helpers (
   disjunction,
   negation,
   neitherNor,

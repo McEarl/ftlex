@@ -1,12 +1,12 @@
 -- |
--- Module      : Ftlex.Position
+-- Module      : FTLex.Position
 -- Copyright   : (c) 2024, Marcel Schütz
 -- License     : LGPL-3
 -- Maintainer  : marcel.schuetz@fau.de
 --
 -- Position type class
 
-module Ftlex.Position (Pos(..)) where
+module FTLex.Position (Pos(..)) where
 
 import Data.Text (Text)
 
