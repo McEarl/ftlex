@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.3.0
+
+* The FTL and TEX lexers now operate on (strict) `ByteString` instead of (lazy)
+  `Text` input.
+
+* The character encoding of the input text must be given as an argument to the
+  lexer. The following are supported:
+
+  - UTF-8
+  - UTF-16 (little endian)
+  - UTF-16 (big endian)
+  - UTF-32 (little endian)
+  - UTF-32 (big endian)
+
+
 ## v0.2.2
 
 * Provide debugging output.

@@ -10,7 +10,7 @@
 
 module Ftlex.Message (LocatedMsg, Msg(..)) where
 
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Ftlex.Position
 
 

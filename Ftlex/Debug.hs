@@ -14,8 +14,8 @@ module Ftlex.Debug (
 ) where
 
 import Prelude hiding (showChar)
-import Data.Text.Lazy (Text)
-import Data.Text.Lazy qualified as Text
+import Data.Text (Text)
+import Data.Text qualified as Text
 import Ftlex.Ftl qualified as FTL
 import Ftlex.Tex qualified as TEX
 import Ftlex.Position

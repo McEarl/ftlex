@@ -11,6 +11,8 @@
 module Ftlex.Base (
   Lexer,
   runLexer,
+  Encoding(..),
+  decode,
   LineBreakType(..),
   splitText,
   removeBom,
@@ -20,8 +22,10 @@ module Ftlex.Base (
   charsOf
 ) where
 
-import Data.Text.Lazy (Text)
-import Data.Text.Lazy qualified as Text
+import Data.ByteString (ByteString)
+import Data.Text.Encoding qualified as Encoding
+import Data.Text (Text)
+import Data.Text qualified as Text
 import Control.Monad.Trans.State.Strict (evalState, State)
 import Text.Megaparsec hiding (State, Pos, label)
 import Data.Set (Set)
@@ -46,6 +50,23 @@ runLexer lexer initState text e =
   case evalState (runParserT lexer "" text) initState of
     Left err -> e err
     Right lexemes -> pure lexemes
+
+
+-- * Text Encodings
+
+data Encoding =
+    UTF8
+  | UTF16LE
+  | UTF16BE
+  | UTF32LE
+  | UTF32BE
+
+decode :: Encoding -> ByteString -> Text
+decode UTF8 = Encoding.decodeUtf8
+decode UTF16LE = Encoding.decodeUtf16LE
+decode UTF16BE = Encoding.decodeUtf16BE
+decode UTF32LE = Encoding.decodeUtf32LE
+decode UTF32BE = Encoding.decodeUtf32BE
 
 
 -- * Splitting the Input Text

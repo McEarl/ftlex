@@ -18,8 +18,9 @@ module Ftlex.Ftl (
   Lexeme(..)
 ) where
 
-import Data.Text.Lazy (Text)
-import Data.Text.Lazy qualified as Text
+import Data.ByteString (ByteString)
+import Data.Text (Text)
+import Data.Text qualified as Text
 import Control.Monad.State.Class (get, put, gets)
 import Text.Megaparsec hiding (Pos)
 import Data.Set (Set)
@@ -212,12 +213,14 @@ initState pos blocks = LexingState{
 
 runLexer :: (Msg p m)
          => p             -- ^ Initial position
-         -> Text          -- ^ Input text
+         -> ByteString    -- ^ Input text
+         -> Base.Encoding -- ^ Encoding of the input text
          -> LexingState p -- ^ Lexing state
          -> LineBreakType -- ^ Line break type
          -> m [Lexeme p]
-runLexer pos text state lineBreakType =
-  runLexer' pos (Base.removeBom text) state lineBreakType
+runLexer pos input encoding state lineBreakType =
+  let text = Base.decode encoding input
+  in runLexer' pos (Base.removeBom text) state lineBreakType
   where
     runLexer' pos text state lineBreakType = do
       -- Split the input text at the first linebreak:
@@ -240,7 +243,7 @@ runLexer pos text state lineBreakType =
       -- Repeat the procedure for the remainder of the input text:
       restLexemes <- if Text.null rest
         then pure []
-        else runLexer newPos' rest newState' lineBreakType
+        else runLexer' newPos' rest newState' lineBreakType
       return $ lexemes ++ lineBreakLexeme ++ restLexemes
 
 

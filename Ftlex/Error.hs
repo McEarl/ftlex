@@ -13,7 +13,7 @@ module Ftlex.Error (
 ) where
 
 import Text.Megaparsec.Error
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.List.NonEmpty as NonEmpty

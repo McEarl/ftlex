@@ -1,5 +1,5 @@
 name: ftlex
-version: 0.2.2
+version: 0.3.0
 cabal-version: >= 1.10
 build-type: Simple
 license: LGPL-3
@@ -44,7 +44,8 @@ library
     megaparsec >= 9.5.0 && <= 9.6.1,
     mtl == 2.3.1,
     text >= 2.0.2 && <= 2.1.1,
-    transformers >= 0.6 && <= 0.6.1.0
+    transformers >= 0.6 && <= 0.6.1.0,
+    bytestring >= 0.11
   default-extensions:
     ImportQualifiedPost
   ghc-options:

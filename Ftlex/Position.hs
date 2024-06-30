@@ -8,7 +8,7 @@
 
 module Ftlex.Position (Pos(..)) where
 
-import Data.Text.Lazy (Text)
+import Data.Text (Text)
 
 class (Ord p) => Pos p where
   noPos :: p

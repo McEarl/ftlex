@@ -19,8 +19,8 @@ module Ftlex.Helpers (
   pair
 ) where
 
-import Data.Text.Lazy (Text)
-import Data.Text.Lazy qualified as Text
+import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Char qualified as Char
 
 -- | The disjunction of a list of predicates.
