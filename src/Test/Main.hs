@@ -44,13 +44,13 @@ main = do
     "TEX" -> showTexLexemes <$> TEX.runLexer initPos input encoding (TEX.initState initPos initUnicodeBlocks) lineBreaks
     _ -> failWith $ "\nUnknown lexer \"" <> Text.pack lexerArg <> "\".\n" <> usageInfo
   putStrLn $ "\n" <> debugOutput
-  putStr "\nIs the above output correct? (Y/N) "
+  putStr "\nIs the above output correct? (y/n) "
   hFlush stdout
   answer <- getLine
   hFlush stdout
   case answer of
-    "Y" -> succeedWith "Test passed.\n"
-    "N" -> failWith "Test failed.\n"
+    "y" -> succeedWith "Test passed.\n"
+    "n" -> failWith "Test failed.\n"
     _ -> failWith "Invalid answer.\nTest failed.\n"
 
 initUnicodeBlocks :: Set UnicodeBlock
@@ -114,9 +114,9 @@ instance Msg Position IO where
   errorLexer :: Position -> Text -> IO a
   errorLexer pos msg = do
     putStrLn $ "Lexing error " <> showPos pos <> ": " <> msg
-    putStrLn "\nIs the above error intended? (Y/N) "
+    putStrLn "\nIs the above error intended? (y/n) "
     answer <- getLine
     case answer of
-      "Y" -> exitSuccess
-      "N" -> exitFailure
+      "y" -> exitSuccess
+      "n" -> exitFailure
       _ -> failWith "Invalid answer.\n"
