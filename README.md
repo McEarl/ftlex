@@ -67,7 +67,7 @@ To run the test suites of this package, execute the following commands:
 ```
 cabal configure --enable-tests
 cabal build
-cabal test --test-options="<file> <lexer> <character encoding> <line break type>" --test-show-details=streaming
+cabal test --test-options="<file> <lexer> <character encoding> <line break type>" --test-show-details=direct
 ```
 
 The arguments passed to `cabal test` by `--test-options` are:
