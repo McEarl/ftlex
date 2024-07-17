@@ -385,7 +385,7 @@ runLexer pos input encoding state lineBreakType =
                 sourcePos = lineBreakPos
               }
               newState{
-                position = newPos'
+                position = newPos''
               }
             Just c -> case inputState newState of
               -- In state N, i.e. if the line so far contained at most spaces, insert
@@ -397,7 +397,7 @@ runLexer pos input encoding state lineBreakType =
                   sourcePos = lineBreakPos
                 }
                 newState{
-                  position = newPos',
+                  position = newPos'',
                   inputState = NewLine
                 }
               -- In state S, insert nothing:
@@ -407,7 +407,7 @@ runLexer pos input encoding state lineBreakType =
                   sourcePos = lineBreakPos
                 }
                 newState{
-                  position = newPos',
+                  position = newPos'',
                   inputState = NewLine
                 }
               -- In state M, insert a space token:
@@ -419,7 +419,7 @@ runLexer pos input encoding state lineBreakType =
                   sourcePos = lineBreakPos
                 }
                 newState{
-                  position = newPos',
+                  position = newPos'',
                   inputState = NewLine
                 }
       -- Repeat the procedure for the remainder of the input text:
