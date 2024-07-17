@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.1
+
+* Fix bugs concerning comments, positions and `^^`-escapes in the TEX lexer.
+
+
 ## v0.3.0
 
 * Let the FTL and TEX lexers operate on (strict) `ByteString` instead of (lazy)
