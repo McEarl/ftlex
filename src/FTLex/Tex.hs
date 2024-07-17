@@ -822,34 +822,16 @@ catchUnknownChar = do
 doubleSuperscript :: (Pos p) => (Char -> Bool) -> TexLexer Char p
 doubleSuperscript pred = do
   state <- get
-  -- Consumes a chunk @chunk@ that satisfies
-  -- @isDoubleSuperscriptExpr state chunk ""@ (the argument @""@ is irrelevant;
-  -- we could have chosen any other string as well):
-  expr <- tokens (isDoubleSuperscriptExpr state) ""
-  -- @expr@ is of the form @xyab@, where @x@ and @y@ are two identical
-  -- superscript characters and @a@ and @b@ are two lower-case hexadecimal
-  -- digits. Thus @char@ is the hexadecimal number @ab@:
-  let charCode = Text.drop 2 expr
-      -- @char@ is the character with (hexadecimal) ASCII code @ab@:
-      char = (Char.chr . fromHex) charCode
-  return char
+  let cats = catCodes state
+  fstSupChar <- satisfy (isSuperscriptChar cats)
+  sndSupChar <- satisfy (== fstSupChar)
+  fstHexDigit <- satisfy isLowerHex
+  sndHexDigit <- satisfy isLowerHex
+  let char = Char.chr . fromHex . Text.pack $ [fstHexDigit, sndHexDigit]
+  if pred char
+    then return char
+    else empty
   where
-    isDoubleSuperscriptExpr :: (Pos p) => LexingState p -> Text -> Text -> Bool
-    isDoubleSuperscriptExpr state txt _ = case Text.unpack txt of
-      [x, y, a, b] -> and [
-          -- @x@ must be a superscript character:
-          isSuperscriptChar (catCodes state) x,
-          -- @y@ must be identical with @x@ (and hence in particular also a
-          -- superscript character):
-          y == x,
-          -- @a@ and @b@ must be lower-case hexadecimal digits:
-          isLowerHex a,
-          isLowerHex b,
-          -- The character with (hexadecimal) ASCII code @ab@ must satisfy the
-          -- predicate @pred@:
-          pred $ (Char.chr . fromHex . Text.pack) [a, b]
-        ]
-      _ -> False
     isLowerHex c = Char.isDigit c || ('a' <= c && c <= 'f')
 
 
