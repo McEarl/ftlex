@@ -11,6 +11,7 @@ module FTLex.Tex (
   CatCodeMap,
   defaultCatCodes,
   runLexer,
+  LexingState(..),
   initState,
   Lexeme(..)
 ) where
@@ -713,7 +714,7 @@ space = do
       position = newPos,
       inputState = newInputState
     }
-  return $ [lexeme]
+  return [lexeme]
 
 
 -- ** Comments
@@ -741,19 +742,11 @@ comment = do
       sourceText = commentText,
       sourcePos = commentPos
     }
-  -- Skip the following end-of-line character:
-  lineBreakChar <- satisfy' $ isEndOfLine cats
-  let lineBreakText = Text.singleton lineBreakChar
-      lineBreakPos = getPosOf lineBreakText newPos
-      newPos' = getNextPos lineBreakText newPos
-      skippedLineBreak = Skipped{
-          sourceText = lineBreakText,
-          sourcePos = lineBreakPos
-        }
   put state{
-      position = newPos'
+      position = newPos,--newPos'
+      inputState = SkippingSpaces
     }
-  return [commentLexeme, skippedLineBreak]
+  return [commentLexeme]--, skippedLineBreak]
 
 
 -- ** Ignored Characters
