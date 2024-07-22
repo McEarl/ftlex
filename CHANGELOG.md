@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.2
+
+* Fix positions of `^^`-escapes in the TEX lexer.
+
+
 ## v0.3.1
 
 * Fix bugs concerning comments, positions and `^^`-escapes in the TEX lexer.

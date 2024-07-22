@@ -460,18 +460,18 @@ controlWord = do
   state <- get
   cats <- gets catCodes
   let pos = position state
-  escapeChar <- satisfy' $ isEscapeChar cats
-  word <- Text.pack <$> some (satisfy' (isLetter cats))
-  let command = Text.cons escapeChar word
-      newPos = getNextPos command pos
-      commandPos = getPosOf command pos
+  (escapeChar, escapeCharSourceText) <- satisfy' $ isEscapeChar cats
+  (word, wordSourceText) <- satisfySome' $ isLetter cats
+  let sourceText = escapeCharSourceText <> wordSourceText
+      newPos = getNextPos sourceText pos
+      commandPos = getPosOf sourceText pos
   put state{
       position = newPos,
       inputState = SkippingSpaces
     }
   return $ singleton ControlWord{
       ctrlWordContent = word,
-      sourceText = command,
+      sourceText = sourceText,
       sourcePos = commandPos
     }
 
@@ -496,18 +496,18 @@ controlSymbol = do
           isCommentPrefix cats,
           isInvalidChar cats -- Yes, an invalid character is acceptable.
         ]
-  escapeChar <- satisfy' $ isEscapeChar cats
-  symbol <- satisfy' isAllowedChar
-  let command = Text.cons escapeChar (Text.singleton symbol)
-      newPos = getNextPos command pos
-      commandPos = getPosOf command pos
+  (escapeChar, escapeCharSourceText) <- satisfy' $ isEscapeChar cats
+  (symbol, symbolSourceText) <- satisfy' isAllowedChar
+  let sourceText = escapeCharSourceText <> symbolSourceText
+      newPos = getNextPos sourceText pos
+      commandPos = getPosOf sourceText pos
   put state{
       position = newPos,
       inputState = MiddleOfLine
     }
   return $ singleton ControlSymbol{
       ctrlSymbolContent = symbol,
-      sourceText = command,
+      sourceText = sourceText,
       sourcePos = commandPos
     }
 
@@ -516,17 +516,17 @@ controlSpace = do
   state <- get
   cats <- gets catCodes
   let pos = position state
-  escapeChar <- satisfy' (isEscapeChar cats)
-  symbol <- satisfy' (isSpace cats)
-  let command = Text.cons escapeChar (Text.singleton symbol)
-      newPos = getNextPos command pos
-      commandPos = getPosOf command pos
+  (escapeChar, escapeCharSourceText) <- satisfy' $ isEscapeChar cats
+  (symbol, symbolSourceText) <- satisfy' $ isSpace cats
+  let sourceText = escapeCharSourceText <> symbolSourceText
+      newPos = getNextPos sourceText pos
+      commandPos = getPosOf sourceText pos
   put state{
       position = newPos,
       inputState = SkippingSpaces
     }
   return $ singleton ControlSpace{
-      sourceText = command,
+      sourceText = sourceText,
       sourcePos = commandPos
     }
 
@@ -560,11 +560,10 @@ character = do
           isActiveChar cats
         ]
   -- Consume a single character that makes a character token:
-  char <- satisfy' isAllowedChar
+  (char, sourceText) <- satisfy' isAllowedChar
   let catCode = fromMaybe InvalidCat (Map.lookup char cats)
-      charText = Text.singleton char
-      charPos = getPosOf charText pos
-      newPos = getNextPos charText pos
+      charPos = getPosOf sourceText pos
+      newPos = getNextPos sourceText pos
   put state{
       position = newPos,
       inputState = MiddleOfLine
@@ -572,7 +571,7 @@ character = do
   return $ singleton Character{
       charContent = char,
       charCatCode = catCode,
-      sourceText = charText,
+      sourceText = sourceText,
       sourcePos = charPos
     }
 
@@ -588,18 +587,18 @@ param = do
   state <- get
   let cats = catCodes state
       pos = position state
-  paramChar <- satisfy' (isParamChar cats)
-  digit <- satisfy' Char.isDigit
-  let paramText = Text.pack [paramChar, digit]
-      paramPos = getPosOf paramText pos
-      newPos = getNextPos paramText pos
+  (paramChar, paramCharSourceText) <- satisfy' (isParamChar cats)
+  (digit, digitSourceText) <- satisfy' Char.isDigit
+  let sourceText = paramCharSourceText <> digitSourceText
+      paramPos = getPosOf sourceText pos
+      newPos = getNextPos sourceText pos
   put state{
       position = newPos,
       inputState = MiddleOfLine
     }
   return $ singleton Parameter{
       paramNumber = Char.digitToInt digit,
-      sourceText = paramText,
+      sourceText = sourceText,
       sourcePos = paramPos
     }
 
@@ -609,11 +608,11 @@ consecParamChars = do
   state <- get
   let cats = catCodes state
       pos = position state
-  fstParamChar <- satisfy' (isParamChar cats)
-  sndParamChar <- satisfy' (isParamChar cats)
-  let paramText = Text.pack [fstParamChar, sndParamChar]
-      paramPos = getPosOf paramText pos
-      newPos = getNextPos paramText pos
+  (fstParamChar, fstParamCharSourceText) <- satisfy' (isParamChar cats)
+  (sndParamChar, sndParamCharSourceText) <- satisfy' (isParamChar cats)
+  let sourceText = fstParamCharSourceText <> sndParamCharSourceText
+      paramPos = getPosOf sourceText pos
+      newPos = getNextPos sourceText pos
   put state{
       position = newPos,
       inputState = MiddleOfLine
@@ -621,7 +620,7 @@ consecParamChars = do
   return $ singleton Character{
       charContent = sndParamChar,
       charCatCode = ParamCharCat,
-      sourceText = paramText,
+      sourceText = sourceText,
       sourcePos = paramPos
     }
 
@@ -635,10 +634,9 @@ endOfLine = do
   let cats = catCodes state
       pos = position state
   -- Consume an end-of-line character:
-  char <- satisfy' $ isEndOfLine cats
-  let charText = Text.singleton char
-      charPos = getPosOf charText pos
-      newPos = getNextPos charText pos
+  (char, sourceText) <- satisfy' $ isEndOfLine cats
+  let charPos = getPosOf sourceText pos
+      newPos = getNextPos sourceText pos
   -- Consume the rest of the line (which will be skipped):
   rest <- Text.pack <$> many (satisfy (negation (isUnknownChar cats)))
   let newPos' = getNextPos rest newPos
@@ -653,19 +651,19 @@ endOfLine = do
         -- a @\\par@ token:
         NewLine -> ControlWord{
             ctrlWordContent = "par",
-            sourceText = charText,
+            sourceText = sourceText,
             sourcePos = charPos
           }
         -- In state S, insert nothing:
         SkippingSpaces -> Skipped{
-            sourceText = charText,
+            sourceText = sourceText,
             sourcePos = charPos
           }
         -- In state M, insert a space token:
         MiddleOfLine -> Character{
             charContent = ' ', 
             charCatCode = SpaceCat,
-            sourceText = charText,
+            sourceText = sourceText,
             sourcePos = charPos
           }
   -- Skip the rest of the line:
@@ -688,26 +686,25 @@ space = do
   state <- get
   let cats = catCodes state
       pos = position state
-  spaceChar <- satisfy' (isSpace cats)
-  let spaceText = Text.singleton spaceChar
-      spacePos = getPosOf spaceText pos
-      newPos = getNextPos spaceText pos
+  (spaceChar, sourceText) <- satisfy' (isSpace cats)
+  let spacePos = getPosOf sourceText pos
+      newPos = getNextPos sourceText pos
       (newInputState, lexeme) = case inputState state of
         -- In state N, skip the space and stay in state N:
         NewLine -> pair NewLine Skipped{
-            sourceText = spaceText,
+            sourceText = sourceText,
             sourcePos = spacePos
           }
         -- In state S, skip the space and stay in state S:
         SkippingSpaces -> pair SkippingSpaces Skipped{
-            sourceText = spaceText,
+            sourceText = sourceText,
             sourcePos = spacePos
           }
         -- In state M, insert a space token and go into state S:
         MiddleOfLine -> pair SkippingSpaces Character{
             charContent = ' ', 
             charCatCode = SpaceCat,
-            sourceText = spaceText,
+            sourceText = sourceText,
             sourcePos = spacePos
           }
   put state{
@@ -725,21 +722,21 @@ comment = do
   state <- get
   let cats = catCodes state
       pos = position state
-  prefix <- satisfy' (isCommentPrefix cats)
+  (prefix, prefixSourceText) <- satisfy' (isCommentPrefix cats)
   commentBody <- takeWhileP Nothing (neitherNor [
       isUnknownChar cats,
       isEndOfLine cats
     ])
-  let commentText = Text.cons prefix commentBody
-      commentPos = getPosOf commentText pos
-      newPos = getNextPos commentText pos
+  let sourceText = prefixSourceText <> commentBody
+      commentPos = getPosOf sourceText pos
+      newPos = getNextPos sourceText pos
   -- Throw an error if there appears an unknown character in the rest of the
   -- line:
   optional $ catchUnknownCharAt newPos
   --  Otherwise, insert a comment lexeme:
   let commentLexeme = Comment{
       commentContent = commentBody,
-      sourceText = commentText,
+      sourceText = sourceText,
       sourcePos = commentPos
     }
   put state{
@@ -757,15 +754,14 @@ ignoredCharacter = do
   state <- get
   let cats = catCodes state
       pos = position state
-  char <- satisfy' (isIgnoredChar cats)
-  let charText = Text.singleton char
-      charPos = getPosOf charText pos
-      newPos = getNextPos charText pos
+  (char, sourceText) <- satisfy' (isIgnoredChar cats)
+  let charPos = getPosOf sourceText pos
+      newPos = getNextPos sourceText pos
   put state{
       position = newPos
     }
   return $ singleton Skipped{
-      sourceText = charText,
+      sourceText = sourceText,
       sourcePos = charPos
     }
 
@@ -778,8 +774,8 @@ catchInvalidCharAt :: (Pos p) => p -> TexLexer a p
 catchInvalidCharAt pos = do
   state <- get
   let cats = catCodes state
-  char <- satisfy' $ isInvalidChar cats
-  let charPos = getPosOf (Text.singleton char) pos
+  (char, sourceText) <- satisfy' $ isInvalidChar cats
+  let charPos = getPosOf sourceText pos
       err = InvalidChar char charPos
   customFailure err
 
@@ -813,13 +809,13 @@ catchUnknownChar = do
   catchUnknownCharAt pos
 
 
--- ** Double-superscript-escaped characters
+-- ** Single Characters
 
 -- | An expression of the form @xyab@, where @x@ and @y@ are two identical
 -- superscript characters and @a@ and @b@ are two lower-case hexadecimal
 -- digits. Moreover, the character @char@ with (hexadecimal) ASCII code @ab@
--- must satisfy a given predicate. Returns @char@.
-doubleSuperscript :: (Pos p) => (Char -> Bool) -> TexLexer Char p
+-- must satisfy a given predicate. Returns @char@ and the source text @xyab@.
+doubleSuperscript :: (Pos p) => (Char -> Bool) -> TexLexer (Char, Text) p
 doubleSuperscript pred = do
   state <- get
   let cats = catCodes state
@@ -828,16 +824,31 @@ doubleSuperscript pred = do
   fstHexDigit <- satisfy isLowerHex
   sndHexDigit <- satisfy isLowerHex
   let char = Char.chr . fromHex . Text.pack $ [fstHexDigit, sndHexDigit]
+      sourceText = Text.singleton fstSupChar <> Text.singleton sndSupChar <> Text.singleton fstHexDigit <> Text.singleton sndHexDigit
   if pred char
-    then return char
+    then return (char, sourceText)
     else empty
   where
     isLowerHex c = Char.isDigit c || ('a' <= c && c <= 'f')
 
-
--- * Helpers
+-- | A single character @char@ that satisfies a given predicate. Returns @char@,
+-- and the source text @xyab@.
+charSatisfyingPred :: (Pos p) => (Char -> Bool) -> TexLexer (Char, Text) p
+charSatisfyingPred pred = do
+  char <- satisfy pred
+  let sourceText = Text.singleton char
+  return (char, sourceText)
 
 -- | A (possibly double-superscrip-escaped) character that satisfies a given
 -- predicate.
-satisfy' :: (Pos p) => (Char -> Bool) -> TexLexer Char p
-satisfy' pred = try (doubleSuperscript pred) <|> satisfy pred
+satisfy' :: (Pos p) => (Char -> Bool) -> TexLexer (Char, Text) p
+satisfy' pred = try (doubleSuperscript pred) <|> charSatisfyingPred pred
+
+-- | A non-empty sequence of (possibly double-superscrip-escaped) characters
+-- that satisfies a given predicate.
+satisfySome' :: (Pos p) => (Char -> Bool) -> TexLexer (Text, Text) p
+satisfySome' pred = do
+  result <- some $ satisfy' pred
+  let text = Text.pack $ map fst result
+      sourceText = Text.concat $ map snd result
+  return (text, sourceText)
