@@ -59,12 +59,19 @@ data Encoding =
   | UTF32LE
   | UTF32BE
 
+-- Decode a byte string wrt. a given character encoding.
 decode :: Encoding -> ByteString -> Text
 decode UTF8 = Encoding.decodeUtf8
-decode UTF16LE = Encoding.decodeUtf16LE
-decode UTF16BE = Encoding.decodeUtf16BE
-decode UTF32LE = Encoding.decodeUtf32LE
-decode UTF32BE = Encoding.decodeUtf32BE
+decode UTF16LE = removeBom . Encoding.decodeUtf16LE
+decode UTF16BE = removeBom . Encoding.decodeUtf16BE
+decode UTF32LE = removeBom . Encoding.decodeUtf32LE
+decode UTF32BE = removeBom . Encoding.decodeUtf32BE
+
+-- | Remove a leading BOM from a text.
+removeBom :: Text -> Text
+removeBom text = case Text.uncons text of
+  Just ('\xFEFF', rest) -> rest
+  _ -> text
 
 
 -- * Splitting the Input Text
@@ -89,15 +96,6 @@ splitText lineBreakType text =
       (line, rest) = Text.breakOn lineBreak text
       rest' = Text.drop (Text.length lineBreak) rest
   in (line, lineBreak, rest')
-
-
--- * Removing a BOM
-
--- | Remove a leading BOM from a text.
-removeBom :: Text -> Text
-removeBom text = case Text.uncons text of
-  Just ('\xFEFF', rest) -> rest
-  _ -> text
 
 
 -- * Unicode Blocks

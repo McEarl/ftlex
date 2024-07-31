@@ -218,7 +218,7 @@ runLexer :: (Msg p m)
          -> m [Lexeme p]
 runLexer pos input encoding state lineBreakType =
   let text = Base.decode encoding input
-  in runLexer' pos (Base.removeBom text) state lineBreakType
+  in runLexer' pos text state lineBreakType
   where
     runLexer' pos text state lineBreakType = do
       -- Split the input text at the first linebreak:
