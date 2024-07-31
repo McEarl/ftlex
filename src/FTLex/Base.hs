@@ -9,19 +9,14 @@
 module FTLex.Base (
   Lexer,
   runLexer,
-  Encoding(..),
-  decode,
   LineBreakType(..),
   splitText,
-  removeBom,
   UnicodeBlock(..),
   isInUnicodeBlock,
   showCodeBlocks,
   charsOf
 ) where
 
-import Data.ByteString (ByteString)
-import Data.Text.Encoding qualified as Encoding
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Control.Monad.Trans.State.Strict (evalState, State)
@@ -48,30 +43,6 @@ runLexer lexer initState text e =
   case evalState (runParserT lexer "" text) initState of
     Left err -> e err
     Right lexemes -> pure lexemes
-
-
--- * Text Encodings
-
-data Encoding =
-    UTF8
-  | UTF16LE
-  | UTF16BE
-  | UTF32LE
-  | UTF32BE
-
--- Decode a byte string wrt. a given character encoding.
-decode :: Encoding -> ByteString -> Text
-decode UTF8 = Encoding.decodeUtf8
-decode UTF16LE = removeBom . Encoding.decodeUtf16LE
-decode UTF16BE = removeBom . Encoding.decodeUtf16BE
-decode UTF32LE = removeBom . Encoding.decodeUtf32LE
-decode UTF32BE = removeBom . Encoding.decodeUtf32BE
-
--- | Remove a leading BOM from a text.
-removeBom :: Text -> Text
-removeBom text = case Text.uncons text of
-  Just ('\xFEFF', rest) -> rest
-  _ -> text
 
 
 -- * Splitting the Input Text

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.3
+
+* Let the FTL and TEX lexers operate on `Text` again. (Since the lexers have to
+  work with code points anyway, e.g. to determine their category codes,
+  accepting `ByteString` instead of `Text` as input only procudes unnecessary
+  overhead.)
+
+
 ## v0.3.2
 
 * Fix positions of `^^`-escapes in the TEX lexer.

@@ -4,8 +4,7 @@ import Prelude hiding (putStrLn, getLine)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (openFile, IOMode(..), hClose, hFlush, stdout)
 import System.Environment (getArgs)
-import Data.ByteString (hGetContents)
-import Data.Text.IO (putStrLn, getLine)
+import Data.Text.IO (putStrLn, getLine, hGetContents)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Set (Set)
@@ -21,16 +20,9 @@ import FTLex.Debug
 main :: IO ()
 main = do
   args <- getArgs
-  (fileArg, lexerArg, encodingArg, lineBreaksArg) <- case args of
-    file : lexer : encoding : lineBreaks : _ -> pure (file, lexer, encoding, lineBreaks)
+  (fileArg, lexerArg, lineBreaksArg) <- case args of
+    file : lexer : lineBreaks : _ -> pure (file, lexer, lineBreaks)
     _ -> failWith $ "\nInvalid number of arguments.\n" <> usageInfo
-  encoding <- case encodingArg of
-    "UTF-8" -> pure UTF8
-    "UTF-16-LE" -> pure UTF16LE
-    "UTF-16-BE" -> pure UTF16BE
-    "UTF-32-LE" -> pure UTF32LE
-    "UTF-32-BE" -> pure UTF32BE
-    _ -> failWith $ "\nUnknown character encoding \"" <> Text.pack encodingArg <> "\".\n" <> usageInfo
   lineBreaks <- case lineBreaksArg of
     "CR" -> pure CR
     "LF" -> pure LF
@@ -40,8 +32,8 @@ main = do
   input <- hGetContents inputH
   hClose inputH
   debugOutput <- case lexerArg of
-    "FTL" -> showFtlLexemes <$> FTL.runLexer initPos input encoding (FTL.initState initPos initUnicodeBlocks) lineBreaks
-    "TEX" -> showTexLexemes <$> TEX.runLexer initPos input encoding (TEX.initState initPos initUnicodeBlocks) lineBreaks
+    "FTL" -> showFtlLexemes <$> FTL.runLexer initPos input (FTL.initState initPos initUnicodeBlocks) lineBreaks
+    "TEX" -> showTexLexemes <$> TEX.runLexer initPos input (TEX.initState initPos initUnicodeBlocks) lineBreaks
     _ -> failWith $ "\nUnknown lexer \"" <> Text.pack lexerArg <> "\".\n" <> usageInfo
   putStrLn $ "\n" <> debugOutput
   putStr "\nIs the above output correct? (y/n) "
@@ -58,11 +50,10 @@ initUnicodeBlocks = Set.fromList [Latin1Supplement]
 
 usageInfo :: Text
 usageInfo =
-  "Usage: cabal test --test-options=\"<file> <lexer> <character encoding> <line break type>\"\n" <>
+  "Usage: cabal test --test-options=\"<file> <lexer> <line break type>\"\n" <>
   "Where:\n" <>
   "  * <file> is a path to a ForTheL document\n" <>
   "  * <lexer> = \"FTL\" | \"TEX\"\n" <>
-  "  * <character encoding> = \"UTF-8\" | \"UTF-16-LE\" | \"UTF-16-BE\" | \"UTF-32-LE\" | \"UTF-32-BE\"\n" <>
   "  * <line break type> = \"CR\" | \"LF\" | \"CRLF\""
 
 failWith :: Text -> IO a

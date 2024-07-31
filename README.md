@@ -11,7 +11,7 @@ ForTheL parsing frameworks.
 ### Cabal
 
 1.  * If you already have a file called `cabal.project` in your project directory,
-      add `https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.2.tar.gz`
+      add `https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.3.tar.gz`
       to `packages` there.
 
     * Otherwise, create a new file `cabal.project` that contains the following lines:
@@ -19,7 +19,7 @@ ForTheL parsing frameworks.
       ```cabal
       packages:
         ./*.cabal
-        https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.2.tar.gz
+        https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.3.tar.gz
       ```
 
 2.  Add `ftlex` to `build-depends` in your `<package name>.cabal`.
@@ -27,21 +27,13 @@ ForTheL parsing frameworks.
 
 ### Stack
 
-1.  Add `https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.2.tar.gz`
+1.  Add `https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.3.tar.gz`
     to `extra-deps` in your `stack.yaml`.
 
 2.  Add `ftlex` to `dependencies` in your `package.yaml`.
 
 
 ## Supported Formats of Input Texts
-
-* The following character encodings are supported for the input text:
-
-  - UTF-8
-  - UTF-16 (little endian)
-  - UTF-16 (big endian)
-  - UTF-32 (little endian)
-  - UTF-32 (big endian)
 
 * The following types of line breaks are supported:
 
@@ -67,24 +59,23 @@ To run the test suites of this package, execute the following commands:
 ```
 cabal configure --enable-tests
 cabal build
-cabal test --test-options="<file> <lexer> <character encoding> <line break type>" --test-show-details=direct
+cabal test --test-options="<file> <lexer> <line break type>" --test-show-details=direct
 ```
 
 The arguments passed to `cabal test` by `--test-options` are:
 
 * `<file>` is the input file whose content will be lexed
 * `<lexer>` = `FTL` | `TEX`
-* `<character encoding>` = `UTF-8` | `UTF-16-LE` | `UTF-16-BE` | `UTF-32-LE` | `UTF-32-BE`
 * `<line break type>` = `CR` | `LF` | `CRLF`
 
-(Note: The option `--test-show-details=streaming` is necessary to allow user
+(Note: The option `--test-show-details=direct` is necessary to allow user
 interaction during a test run.)
 
 
 ### Generating a Source Distribution File
 
 To generate a tarball of this package – which will be located at
-`dist-newstyle/sdist/ftlex-0.3.2.tar.gz` – simply execute the following command:
+`dist-newstyle/sdist/ftlex-0.3.3.tar.gz` – simply execute the following command:
 
 ```
 cabal sdist

@@ -16,7 +16,6 @@ module FTLex.Ftl (
   Lexeme(..)
 ) where
 
-import Data.ByteString (ByteString)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Control.Monad.State.Class (get, put, gets)
@@ -211,38 +210,33 @@ initState pos blocks = LexingState{
 
 runLexer :: (Msg p m)
          => p             -- ^ Initial position
-         -> ByteString    -- ^ Input text
-         -> Base.Encoding -- ^ Encoding of the input text
+         -> Text          -- ^ Input text
          -> LexingState p -- ^ Lexing state
          -> LineBreakType -- ^ Line break type
          -> m [Lexeme p]
-runLexer pos input encoding state lineBreakType =
-  let text = Base.decode encoding input
-  in runLexer' pos text state lineBreakType
-  where
-    runLexer' pos text state lineBreakType = do
-      -- Split the input text at the first linebreak:
-      let (line, lineBreak, rest) = Base.splitText lineBreakType text
-      -- Lex the first line of the input text:
-      (lexemes, newState) <- Base.runLexer
-        ftlLine
-        state
-        line
-        (handleError makeErrMsg)
-      -- Turn the line break into a space lexeme:
-      let newPos = position newState
-          lineBreakPos = getPosOf lineBreak newPos
-          newPos' = getNextPos lineBreak newPos
-          lineBreakLexeme = singleton Space{
-              sourceText = lineBreak,
-              sourcePos = lineBreakPos
-            }
-          newState' = newState{position = newPos'}
-      -- Repeat the procedure for the remainder of the input text:
-      restLexemes <- if Text.null rest
-        then pure []
-        else runLexer' newPos' rest newState' lineBreakType
-      return $ lexemes ++ lineBreakLexeme ++ restLexemes
+runLexer pos input state lineBreakType = do
+  -- Split the input text at the first linebreak:
+  let (line, lineBreak, rest) = Base.splitText lineBreakType input
+  -- Lex the first line of the input text:
+  (lexemes, newState) <- Base.runLexer
+    ftlLine
+    state
+    line
+    (handleError makeErrMsg)
+  -- Turn the line break into a space lexeme:
+  let newPos = position newState
+      lineBreakPos = getPosOf lineBreak newPos
+      newPos' = getNextPos lineBreak newPos
+      lineBreakLexeme = singleton Space{
+          sourceText = lineBreak,
+          sourcePos = lineBreakPos
+        }
+      newState' = newState{position = newPos'}
+  -- Repeat the procedure for the remainder of the input text:
+  restLexemes <- if Text.null rest
+    then pure []
+    else runLexer newPos' rest newState' lineBreakType
+  return $ lexemes ++ lineBreakLexeme ++ restLexemes
 
 
 -- * Lexer Combinators
