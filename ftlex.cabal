@@ -1,5 +1,5 @@
 name: ftlex
-version: 0.3.3
+version: 0.3.4
 cabal-version: >= 1.10
 build-type: Simple
 license: LGPL-3
@@ -68,6 +68,7 @@ test-suite test
     text >= 2.0.2,
     containers >= 0.6.7,
     bytestring >= 0.12,
+    filepath,
     ftlex
   default-extensions:
     ImportQualifiedPost

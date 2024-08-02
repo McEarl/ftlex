@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.4
+
+* Improved line break handling: Split the complete input text into lines that
+  arethen processed by the lexer, where any of the strings `\r`, `\n` and `\r\n`
+  is considered as a line break.
+
+* Autmatically determine the ForTheL dialect from the file name extension of the
+  input file in the test suite.
+
+
 ## v0.3.3
 
 * Let the FTL and TEX lexers operate on `Text` again. (Since the lexers have to

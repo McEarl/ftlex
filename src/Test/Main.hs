@@ -4,6 +4,7 @@ import Prelude hiding (putStrLn, getLine)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (openFile, IOMode(..), hClose, hFlush, stdout)
 import System.Environment (getArgs)
+import System.FilePath
 import Data.Text.IO (putStrLn, getLine, hGetContents)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -20,21 +21,16 @@ import FTLex.Debug
 main :: IO ()
 main = do
   args <- getArgs
-  (fileArg, lexerArg, lineBreaksArg) <- case args of
-    file : lexer : lineBreaks : _ -> pure (file, lexer, lineBreaks)
+  fileArg <- case args of
+    [file] -> pure file
     _ -> failWith $ "\nInvalid number of arguments.\n" <> usageInfo
-  lineBreaks <- case lineBreaksArg of
-    "CR" -> pure CR
-    "LF" -> pure LF
-    "CRLF" -> pure CRLF
-    _ -> failWith $ "\nUnknown line break type \"" <> Text.pack lineBreaksArg <> "\".\n" <> usageInfo
   inputH <- openFile fileArg ReadMode
   input <- hGetContents inputH
   hClose inputH
-  debugOutput <- case lexerArg of
-    "FTL" -> showFtlLexemes <$> FTL.runLexer initPos input (FTL.initState initPos initUnicodeBlocks) lineBreaks
-    "TEX" -> showTexLexemes <$> TEX.runLexer initPos input (TEX.initState initPos initUnicodeBlocks) lineBreaks
-    _ -> failWith $ "\nUnknown lexer \"" <> Text.pack lexerArg <> "\".\n" <> usageInfo
+  debugOutput <- case splitExtensions fileArg of
+    (_, ".ftl") -> showFtlLexemes <$> FTL.runLexer initPos input (FTL.initState initPos initUnicodeBlocks)
+    (_, ".ftl.tex") -> showTexLexemes <$> TEX.runLexer initPos input (TEX.initState initPos initUnicodeBlocks)
+    (_, ext) -> failWith $ "\nInvalid file name extension \"" <> Text.pack ext <> "\". Only \".ftl\" or \".ftl.tex\" are allowed.\n" <> usageInfo
   putStrLn $ "\n" <> debugOutput
   putStr "\nIs the above output correct? (y/n) "
   hFlush stdout
@@ -50,11 +46,7 @@ initUnicodeBlocks = Set.fromList [Latin1Supplement]
 
 usageInfo :: Text
 usageInfo =
-  "Usage: cabal test --test-options=\"<file> <lexer> <line break type>\"\n" <>
-  "Where:\n" <>
-  "  * <file> is a path to a ForTheL document\n" <>
-  "  * <lexer> = \"FTL\" | \"TEX\"\n" <>
-  "  * <line break type> = \"CR\" | \"LF\" | \"CRLF\""
+  "Usage: cabal test --test-options=\"<path to ForTheL file> (FTL|TEX)\"\n"
 
 failWith :: Text -> IO a
 failWith msg = putStrLn msg >> hFlush stdout >> exitFailure

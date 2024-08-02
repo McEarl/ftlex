@@ -11,7 +11,7 @@ ForTheL parsing frameworks.
 ### Cabal
 
 1.  * If you already have a file called `cabal.project` in your project directory,
-      add `https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.3.tar.gz`
+      add `https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.4.tar.gz`
       to `packages` there.
 
     * Otherwise, create a new file `cabal.project` that contains the following lines:
@@ -19,7 +19,7 @@ ForTheL parsing frameworks.
       ```cabal
       packages:
         ./*.cabal
-        https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.3.tar.gz
+        https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.4.tar.gz
       ```
 
 2.  Add `ftlex` to `build-depends` in your `<package name>.cabal`.
@@ -27,7 +27,7 @@ ForTheL parsing frameworks.
 
 ### Stack
 
-1.  Add `https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.3.tar.gz`
+1.  Add `https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.4.tar.gz`
     to `extra-deps` in your `stack.yaml`.
 
 2.  Add `ftlex` to `dependencies` in your `package.yaml`.
@@ -59,14 +59,8 @@ To run the test suites of this package, execute the following commands:
 ```
 cabal configure --enable-tests
 cabal build
-cabal test --test-options="<file> <lexer> <line break type>" --test-show-details=direct
+cabal test --test-options="<path to ForTheL file>" --test-show-details=direct
 ```
-
-The arguments passed to `cabal test` by `--test-options` are:
-
-* `<file>` is the input file whose content will be lexed
-* `<lexer>` = `FTL` | `TEX`
-* `<line break type>` = `CR` | `LF` | `CRLF`
 
 (Note: The option `--test-show-details=direct` is necessary to allow user
 interaction during a test run.)
@@ -75,7 +69,7 @@ interaction during a test run.)
 ### Generating a Source Distribution File
 
 To generate a tarball of this package – which will be located at
-`dist-newstyle/sdist/ftlex-0.3.3.tar.gz` – simply execute the following command:
+`dist-newstyle/sdist/ftlex-0.3.4.tar.gz` – simply execute the following command:
 
 ```
 cabal sdist

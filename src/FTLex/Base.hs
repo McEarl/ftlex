@@ -9,7 +9,7 @@
 module FTLex.Base (
   Lexer,
   runLexer,
-  LineBreakType(..),
+  Lines(..),
   splitText,
   UnicodeBlock(..),
   isInUnicodeBlock,
@@ -47,26 +47,23 @@ runLexer lexer initState text e =
 
 -- * Splitting the Input Text
 
--- | Supported types of line breaks.
-data LineBreakType =
-    CR    -- ^ Carriage return (@\\r@)
-  | LF    -- ^ Line feed (@\\n@)
-  | CRLF  -- ^ Carriage return + line feed (@\\r\\n@)
+data Lines =
+    MiddleLine Text Text Lines
+    -- ^ A line that is *not* the last line of a text, its subsequent line break
+    -- and its following lines.
+  | LastLine Text
+    -- ^ The last line of a text
 
--- | @splitText lineBreakType text@ splits a text @text@ in
--- 1. the content of its first line, without the line break
---    character(s) (which are determined  by @lineBreakType@),
--- 2. all trailing spaces and the line break character(s), and
--- 3. the rest of the text.
-splitText :: LineBreakType -> Text -> (Text, Text, Text)
-splitText lineBreakType text =
-  let lineBreak = case lineBreakType of
-        CR -> "\r"
-        LF -> "\n"
-        CRLF -> "\r\n"
-      (line, rest) = Text.breakOn lineBreak text
-      rest' = Text.drop (Text.length lineBreak) rest
-  in (line, lineBreak, rest')
+-- | Split a text into lines
+splitText :: Text -> Lines
+splitText text =
+  let (beforeBreak, rest) = Text.break (`elem` ['\r', '\n']) text
+  in case Text.uncons rest of
+    Just ('\r', rest') -> case Text.uncons rest' of
+      Just ('\n', rest'') -> MiddleLine beforeBreak "\r\n" $ splitText rest''
+      _ -> MiddleLine beforeBreak "\r" $ splitText rest'
+    Just ('\n', rest') -> MiddleLine beforeBreak "\n" $ splitText rest'
+    _ -> LastLine beforeBreak
 
 
 -- * Unicode Blocks

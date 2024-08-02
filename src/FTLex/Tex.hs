@@ -29,7 +29,7 @@ import Data.Maybe (isNothing, fromMaybe)
 import FTLex.Position
 import FTLex.Error
 import FTLex.Message
-import FTLex.Base (LineBreakType(..), UnicodeBlock(..))
+import FTLex.Base (Lines(..), UnicodeBlock(..))
 import FTLex.Base qualified as Base
 import FTLex.Helpers
 
@@ -343,11 +343,12 @@ runLexer :: (Msg p m)
          => p             -- ^ Initial position
          -> Text          -- ^ Input text
          -> LexingState p -- ^ Lexing state
-         -> LineBreakType -- ^ Line break type
          -> m [Lexeme p]
-runLexer pos input state lineBreakType = do
-      -- Split the input text at the first linebreak:
-      let (line, lineBreak, rest) = Base.splitText lineBreakType input
+runLexer pos input state =
+  let lines = Base.splitText input
+  in runLexer' pos lines state
+  where
+    runLexer' pos (MiddleLine line lineBreak rest) state = do
       -- Remove all trailing spaces from the first line:
       let trimmedLine = Text.dropWhileEnd (isSpace (catCodes state)) line
           trailingSpaces = Text.takeWhileEnd (isSpace (catCodes state)) line
@@ -361,8 +362,7 @@ runLexer pos input state lineBreakType = do
       let newPos = position newState
           trailingSpacesPos = getPosOf trailingSpaces newPos
           newPos' = getNextPos trailingSpaces newPos
-          spaceLexeme =
-            if Text.null trailingSpaces
+          spaceLexeme = if Text.null trailingSpaces
             then []
             else singleton Skipped{
                 sourceText = trailingSpaces,
@@ -416,11 +416,15 @@ runLexer pos input state lineBreakType = do
                   position = newPos'',
                   inputState = NewLine
                 }
-      -- Repeat the procedure for the remainder of the input text:
-      restLexemes <- if Text.null rest
-        then pure []
-        else runLexer newPos'' rest newState' lineBreakType
+      restLexemes <- runLexer' newPos'' rest newState'
       return $ lexemes ++ spaceLexeme ++ [lineBreakLexeme] ++ restLexemes
+    runLexer' pos (LastLine line) state = do
+      (lexemes, _) <- Base.runLexer
+        texLine
+        state{inputState = NewLine}
+        line
+        (handleError makeErrMsg)
+      return lexemes
 
 
 -- * Lexer Combinators

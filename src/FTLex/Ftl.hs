@@ -27,7 +27,7 @@ import Data.Map.Strict qualified as Map
 import FTLex.Position
 import FTLex.Error
 import FTLex.Message
-import FTLex.Base (LineBreakType(..), UnicodeBlock(..))
+import FTLex.Base (Lines(..), UnicodeBlock(..))
 import FTLex.Base qualified as Base
 import FTLex.Helpers
 
@@ -212,31 +212,34 @@ runLexer :: (Msg p m)
          => p             -- ^ Initial position
          -> Text          -- ^ Input text
          -> LexingState p -- ^ Lexing state
-         -> LineBreakType -- ^ Line break type
          -> m [Lexeme p]
-runLexer pos input state lineBreakType = do
-  -- Split the input text at the first linebreak:
-  let (line, lineBreak, rest) = Base.splitText lineBreakType input
-  -- Lex the first line of the input text:
-  (lexemes, newState) <- Base.runLexer
-    ftlLine
-    state
-    line
-    (handleError makeErrMsg)
-  -- Turn the line break into a space lexeme:
-  let newPos = position newState
-      lineBreakPos = getPosOf lineBreak newPos
-      newPos' = getNextPos lineBreak newPos
-      lineBreakLexeme = singleton Space{
-          sourceText = lineBreak,
-          sourcePos = lineBreakPos
-        }
-      newState' = newState{position = newPos'}
-  -- Repeat the procedure for the remainder of the input text:
-  restLexemes <- if Text.null rest
-    then pure []
-    else runLexer newPos' rest newState' lineBreakType
-  return $ lexemes ++ lineBreakLexeme ++ restLexemes
+runLexer pos input state =
+  let lines = Base.splitText input
+  in runLexer' pos lines state
+  where
+    runLexer' pos (MiddleLine line lineBreak rest) state = do
+      (lexemes, newState) <- Base.runLexer
+        ftlLine
+        state
+        line
+        (handleError makeErrMsg)
+      let newPos = position newState
+          lineBreakPos = getPosOf lineBreak newPos
+          newPos' = getNextPos lineBreak newPos
+          lineBreakLexeme = singleton Space{
+              sourceText = lineBreak,
+              sourcePos = lineBreakPos
+            }
+          newState' = newState{position = newPos'}
+      restLexemes <- runLexer' newPos' rest newState'
+      return $ lexemes ++ lineBreakLexeme ++ restLexemes
+    runLexer' pos (LastLine line) state = do
+      (lexemes, _) <- Base.runLexer
+        ftlLine
+        state
+        line
+        (handleError makeErrMsg)
+      return lexemes
 
 
 -- * Lexer Combinators
