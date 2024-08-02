@@ -33,23 +33,6 @@ ForTheL parsing frameworks.
 2.  Add `ftlex` to `dependencies` in your `package.yaml`.
 
 
-## Supported Formats of Input Texts
-
-* The following types of line breaks are supported:
-
-  - CR, i.e. `\r`
-  - LF, i.e. `\n`
-  - CRLF, i.e. `\r\n`
-
-* Characters from the following Unicode blocks are supported:
-
-  - Basic Latin
-  - Latin-1 Supplement
-  - Latin Extended-A
-  - Latin Extended-B
-  - IPA Extensions
-
-
 ## Development
 
 ### Running the Test Suites
