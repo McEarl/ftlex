@@ -13,7 +13,30 @@ module FTLex.Tex (
   runLexer,
   LexingState(..),
   initState,
-  Lexeme(..)
+  Lexeme(..),
+  isCharacterLexeme,
+  isControlWordLexeme,
+  isControlSymbolLexeme,
+  isControlSpaceLexeme,
+  isParameterLexeme,
+  isSkippedLexeme,
+  isCommentLexeme,
+  isEscapeCharLexeme,
+  isBeginGroupCharLexeme,
+  isEndGroupCharLexeme,
+  isMathShiftCharLexeme,
+  isAlignTabCharLexeme,
+  isEndOfLineCharLexeme,
+  isParamCharLexeme,
+  isSuperscriptCharLexeme,
+  isSubscriptCharLexeme,
+  isIgnoredCharLexeme,
+  isSpaceCharLexeme,
+  isLetterCharLexeme,
+  isOtherCharLexeme,
+  isActiveCharLexeme,
+  isCommentPrefixCharLexeme,
+  isInvalidCharLexeme
 ) where
 
 import Data.Text (Text)
@@ -55,7 +78,7 @@ data CatCode =
   | CommentPrefixCat  -- ^ 14: Comment Prefix
   | InvalidCat        -- ^ 15: Invalid character
   | UnknownCat        -- ^     Unknown character
-  deriving Eq
+  deriving (Eq, Ord)
 
 -- | A map that assigns a character a category code. Any character not contained
 -- in that map is supposed to throw an "unknown character" error during lexing.
@@ -278,6 +301,115 @@ data (Pos p) => Lexeme p =
       sourceText :: Text,
       sourcePos :: p
     } -- ^ Comment
+  deriving (Eq, Ord)
+
+isCharacterLexeme :: (Pos p) => Lexeme p -> Bool
+isCharacterLexeme Character{} = True
+isCharacterLexeme _ = False
+
+isControlWordLexeme :: (Pos p) => Lexeme p -> Bool
+isControlWordLexeme ControlWord{} = True
+isControlWordLexeme _ = False
+
+isControlSymbolLexeme :: (Pos p) => Lexeme p -> Bool
+isControlSymbolLexeme ControlSymbol{} = True
+isControlSymbolLexeme _ = False
+
+isControlSpaceLexeme :: (Pos p) => Lexeme p -> Bool
+isControlSpaceLexeme ControlSpace{} = True
+isControlSpaceLexeme _ = False
+
+isParameterLexeme :: (Pos p) => Lexeme p -> Bool
+isParameterLexeme Parameter{} = True
+isParameterLexeme _ = False
+
+isSkippedLexeme :: (Pos p) => Lexeme p -> Bool
+isSkippedLexeme Skipped{} = True
+isSkippedLexeme _ = False
+
+isCommentLexeme :: (Pos p) => Lexeme p -> Bool
+isCommentLexeme Comment{} = True
+isCommentLexeme _ = False
+
+isEscapeCharLexeme :: (Pos p) => Lexeme p -> Bool
+isEscapeCharLexeme Character{charCatCode = catCode}
+  | catCode == EscapeCharCat = True
+isEscapeCharLexeme _ = False
+
+isBeginGroupCharLexeme :: (Pos p) => Lexeme p -> Bool
+isBeginGroupCharLexeme Character{charCatCode = catCode}
+  | catCode == BeginGroupCat = True
+isBeginGroupCharLexeme _ = False
+
+isEndGroupCharLexeme :: (Pos p) => Lexeme p -> Bool
+isEndGroupCharLexeme Character{charCatCode = catCode}
+  | catCode == EndGroupCat = True
+isEndGroupCharLexeme _ = False
+
+isMathShiftCharLexeme :: (Pos p) => Lexeme p -> Bool
+isMathShiftCharLexeme Character{charCatCode = catCode}
+  | catCode == MathShiftCat = True
+isMathShiftCharLexeme _ = False
+
+isAlignTabCharLexeme :: (Pos p) => Lexeme p -> Bool
+isAlignTabCharLexeme Character{charCatCode = catCode}
+  | catCode == AlignTabCat = True
+isAlignTabCharLexeme _ = False
+
+isEndOfLineCharLexeme :: (Pos p) => Lexeme p -> Bool
+isEndOfLineCharLexeme Character{charCatCode = catCode}
+  | catCode == EndOfLineCat = True
+isEndOfLineCharLexeme _ = False
+
+isParamCharLexeme :: (Pos p) => Lexeme p -> Bool
+isParamCharLexeme Character{charCatCode = catCode}
+  | catCode == ParamCharCat = True
+isParamCharLexeme _ = False
+
+isSuperscriptCharLexeme :: (Pos p) => Lexeme p -> Bool
+isSuperscriptCharLexeme Character{charCatCode = catCode}
+  | catCode == SuperscriptCat = True
+isSuperscriptCharLexeme _ = False
+
+isSubscriptCharLexeme :: (Pos p) => Lexeme p -> Bool
+isSubscriptCharLexeme Character{charCatCode = catCode}
+  | catCode == SubscriptCat = True
+isSubscriptCharLexeme _ = False
+
+isIgnoredCharLexeme :: (Pos p) => Lexeme p -> Bool
+isIgnoredCharLexeme Character{charCatCode = catCode}
+  | catCode == IgnoredCat = True
+isIgnoredCharLexeme _ = False
+
+isSpaceCharLexeme :: (Pos p) => Lexeme p -> Bool
+isSpaceCharLexeme Character{charCatCode = catCode}
+  | catCode == SpaceCat = True
+isSpaceCharLexeme _ = False
+
+isLetterCharLexeme :: (Pos p) => Lexeme p -> Bool
+isLetterCharLexeme Character{charCatCode = catCode}
+  | catCode == LetterCat = True
+isLetterCharLexeme _ = False
+
+isOtherCharLexeme :: (Pos p) => Lexeme p -> Bool
+isOtherCharLexeme Character{charCatCode = catCode}
+  | catCode == OtherCat = True
+isOtherCharLexeme _ = False
+
+isActiveCharLexeme :: (Pos p) => Lexeme p -> Bool
+isActiveCharLexeme Character{charCatCode = catCode}
+  | catCode == ActiveCat = True
+isActiveCharLexeme _ = False
+
+isCommentPrefixCharLexeme :: (Pos p) => Lexeme p -> Bool
+isCommentPrefixCharLexeme Character{charCatCode = catCode}
+  | catCode == CommentPrefixCat = True
+isCommentPrefixCharLexeme _ = False
+
+isInvalidCharLexeme :: (Pos p) => Lexeme p -> Bool
+isInvalidCharLexeme Character{charCatCode = catCode}
+  | catCode == InvalidCat = True
+isInvalidCharLexeme _ = False
 
 
 -- * Errors

@@ -13,7 +13,11 @@ module FTLex.Ftl (
   initState,
   runLexer,
   LexingState(..),
-  Lexeme(..)
+  Lexeme(..),
+  isSymbolLexeme,
+  isWordLexeme,
+  isSpaceLexeme,
+  isCommentLexeme
 ) where
 
 import Data.Text (Text)
@@ -159,6 +163,23 @@ data (Pos p) => Lexeme p =
       sourceText :: Text,
       sourcePos :: p
     } -- ^ A comment
+  deriving (Eq, Ord)
+
+isSymbolLexeme :: (Pos p) => Lexeme p -> Bool
+isSymbolLexeme Symbol{} = True
+isSymbolLexeme _ = False
+
+isWordLexeme :: (Pos p) => Lexeme p -> Bool
+isWordLexeme Word{} = True
+isWordLexeme _ = False
+
+isSpaceLexeme :: (Pos p) => Lexeme p -> Bool
+isSpaceLexeme Space{} = True
+isSpaceLexeme _ = False
+
+isCommentLexeme :: (Pos p) => Lexeme p -> Bool
+isCommentLexeme Comment{} = True
+isCommentLexeme _ = False
 
 
 -- * Errors

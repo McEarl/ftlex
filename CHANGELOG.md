@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.5
+
+* Add `Eq` and `Ord` instances for `Ftl.Lexeme p` and `Tex.Lexeme p`
+
+* Provide functions to check whether a lexeme is of a given type.
+
+
 ## v0.3.4
 
 * Improved line break handling: Split the complete input text into lines that
