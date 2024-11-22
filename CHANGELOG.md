@@ -1,8 +1,15 @@
 # Changelog
 
+## v0.3.6
+
+* Move the position type from `Test.Main` to `FTLex.Position`.
+
+* Globally disable warning for orphan instances.
+
+
 ## v0.3.5
 
-* Add `Eq` and `Ord` instances for `Ftl.Lexeme p` and `Tex.Lexeme p`
+* Add `Eq` and `Ord` instances for `Ftl.Lexeme p` and `Tex.Lexeme p`.
 
 * Provide functions to check whether a lexeme is of a given type.
 

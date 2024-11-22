@@ -11,7 +11,7 @@ ForTheL parsing frameworks.
 ### Cabal
 
 1.  * If you already have a file called `cabal.project` in your project directory,
-      add `https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.5.tar.gz`
+      add `https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.6.tar.gz`
       to `packages` there.
 
     * Otherwise, create a new file `cabal.project` that contains the following lines:
@@ -19,7 +19,7 @@ ForTheL parsing frameworks.
       ```cabal
       packages:
         ./*.cabal
-        https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.5.tar.gz
+        https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.6.tar.gz
       ```
 
 2.  Add `ftlex` to `build-depends` in your `<package name>.cabal`.
@@ -27,7 +27,7 @@ ForTheL parsing frameworks.
 
 ### Stack
 
-1.  Add `https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.5.tar.gz`
+1.  Add `https://github.com/McEarl/ftlex/archive/refs/tags/v0.3.6.tar.gz`
     to `extra-deps` in your `stack.yaml`.
 
 2.  Add `ftlex` to `dependencies` in your `package.yaml`.

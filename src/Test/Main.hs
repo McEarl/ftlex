@@ -40,6 +40,8 @@ main = do
     "y" -> succeedWith "Test passed.\n"
     "n" -> failWith "Test failed.\n"
     _ -> failWith "Invalid answer.\nTest failed.\n"
+  where
+    initPos = SimplePosition 1 1
 
 initUnicodeBlocks :: Set UnicodeBlock
 initUnicodeBlocks = Set.fromList [Latin1Supplement]
@@ -55,46 +57,10 @@ succeedWith :: Text -> IO a
 succeedWith msg = putStrLn msg>> hFlush stdout >> exitSuccess
 
 
--- * Position
-
-data Position = Position {
-    pLine :: Int,
-    pColumn :: Int
-  }
-  deriving (Eq, Ord)
-
-initPos :: Position
-initPos = Position 1 1
-
-instance Pos Position where
-  noPos :: Position
-  noPos = Position 0 0
-
-  getNextPos :: Text -> Position -> Position
-  getNextPos text pos =
-    let
-      lineBreakNo = Text.count "\n" text
-      newLine = pLine pos + fromIntegral lineBreakNo
-      (_, lastCol) = Text.breakOnEnd "\n" text
-      newCol = if lineBreakNo > 0
-        then (fromIntegral . Text.length) lastCol + 1
-        else pColumn pos + (fromIntegral . Text.length) lastCol
-    in Position newLine newCol
-
-  getPosOf :: Text -> Position -> Position
-  getPosOf _ pos = pos
-
-  showPos :: Position -> Text
-  showPos (Position line col) =
-    "(line " <> showNumber line <> ", " <> "column " <> showNumber col <> ")"
-    where
-      showNumber = Text.pack . show
-
-
 -- * Message
 
-instance Msg Position IO where
-  errorLexer :: Position -> Text -> IO a
+instance Msg SimplePosition IO where
+  errorLexer :: SimplePosition -> Text -> IO a
   errorLexer pos msg = do
     putStrLn $ "Lexing error " <> showPos pos <> ": " <> msg
     putStrLn "\nIs the above error intended? (y/n) "
