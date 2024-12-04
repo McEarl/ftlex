@@ -31,7 +31,7 @@ data SimplePosition = SimplePosition {
     line :: Int,
     column :: Int
   }
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 instance Pos SimplePosition where
   noPos :: SimplePosition

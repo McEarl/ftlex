@@ -163,7 +163,7 @@ data (Pos p) => Lexeme p =
       sourceText :: Text,
       sourcePos :: p
     } -- ^ A comment
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 isSymbolLexeme :: (Pos p) => Lexeme p -> Bool
 isSymbolLexeme Symbol{} = True

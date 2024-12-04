@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.7
+
+* Add `Show` instances for lexemes.
+
+
 ## v0.3.6
 
 * Move the position type from `Test.Main` to `FTLex.Position`.

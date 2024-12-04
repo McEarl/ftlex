@@ -78,7 +78,7 @@ data CatCode =
   | CommentPrefixCat  -- ^ 14: Comment Prefix
   | InvalidCat        -- ^ 15: Invalid character
   | UnknownCat        -- ^     Unknown character
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 -- | A map that assigns a character a category code. Any character not contained
 -- in that map is supposed to throw an "unknown character" error during lexing.
@@ -301,7 +301,7 @@ data (Pos p) => Lexeme p =
       sourceText :: Text,
       sourcePos :: p
     } -- ^ Comment
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 isCharacterLexeme :: (Pos p) => Lexeme p -> Bool
 isCharacterLexeme Character{} = True
