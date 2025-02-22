@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.8
+
+* Horizontal space characters preceeded by a backslash are not longer considered
+  as line breaks.
+
+
 ## v0.3.7
 
 * Add `Show` instances for lexemes.

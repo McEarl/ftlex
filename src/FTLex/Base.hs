@@ -57,13 +57,29 @@ data Lines =
 -- | Split a text into lines
 splitText :: Text -> Lines
 splitText text =
-  let (beforeBreak, rest) = Text.break (`elem` ['\r', '\n']) text
+  let (beforeBreak, rest) = breakText text
   in case Text.uncons rest of
     Just ('\r', rest') -> case Text.uncons rest' of
       Just ('\n', rest'') -> MiddleLine beforeBreak "\r\n" $ splitText rest''
       _ -> MiddleLine beforeBreak "\r" $ splitText rest'
     Just ('\n', rest') -> MiddleLine beforeBreak "\n" $ splitText rest'
     _ -> LastLine beforeBreak
+
+-- | Break a text before its first line break. If the text has no line break,
+-- the second component of the output is empty. A carriage return or a line
+-- feed character preceeded by a backslash is *not* regarded as a line break.
+-- In particular, this means that a a text of the form @"foo\\\\\\r\\nbar"@ is
+-- split into @("foo\\\\\\r","\\nbar")@.
+breakText :: Text -> (Text, Text)
+breakText text =
+  let (beforeBreak, rest) = Text.break (`elem` ['\r', '\n']) text
+  in case Text.unsnoc beforeBreak of
+    Just (_, '\\') -> if Text.null rest
+      then (beforeBreak <> "\r", "")
+      else
+        let (beforeBreak', rest') = breakText (Text.tail rest)
+        in (beforeBreak <> Text.singleton (Text.head rest) <> beforeBreak', rest')
+    _ -> (beforeBreak, rest)
 
 
 -- * Unicode Blocks

@@ -104,7 +104,8 @@ defCatCode _ = InvalidCat
 -- | Default space characters.
 isDefSpace :: Char -> Bool
 isDefSpace c = elem c $
-     ['\x0020']  -- Space
+     ['\x0020'] -- Space
+  ++ ['\x000A'] -- Line feed
   -- Latin-1 Supplement:
   ++ ['\x00A0'] -- Non-breakable space
 
