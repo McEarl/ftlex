@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.9
+
+* Revert the changes made in `v0.3.8` and handle backslashed line breaks
+  properly: In the FTL lexer they do not get a special treatment while in the
+  TEX lexer any escape character followed by a line break is turned into a
+  control space
+
+
 ## v0.3.8
 
 * Horizontal space characters preceeded by a backslash are not longer considered

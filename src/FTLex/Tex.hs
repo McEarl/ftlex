@@ -583,7 +583,7 @@ texLine = do
 -- ** Control Sequences
 
 controlSequence :: (Pos p) => TexLexer [Lexeme p] p
-controlSequence = try controlWord <|> try controlSymbol <|> controlSpace
+controlSequence = try controlWord <|> try controlSymbol <|> try controlSpace <|> controlSpace'
 
 controlWord :: (Pos p) => TexLexer [Lexeme p] p
 controlWord = do
@@ -649,6 +649,27 @@ controlSpace = do
   (escapeChar, escapeCharSourceText) <- satisfy' $ isEscapeChar cats
   (symbol, symbolSourceText) <- satisfy' $ isSpace cats
   let sourceText = escapeCharSourceText <> symbolSourceText
+      newPos = getNextPos sourceText pos
+      commandPos = getPosOf sourceText pos
+  put state{
+      position = newPos,
+      inputState = SkippingSpaces
+    }
+  return $ singleton ControlSpace{
+      sourceText = sourceText,
+      sourcePos = commandPos
+    }
+
+-- | A backslash without any following character, i.e. a backslash followed by a
+-- line break.
+controlSpace' :: (Pos p) => TexLexer [Lexeme p] p
+controlSpace' = do
+  state <- get
+  cats <- gets catCodes
+  let pos = position state
+  (escapeChar, escapeCharSourceText) <- satisfy' $ isEscapeChar cats
+  lookAhead eof
+  let sourceText = escapeCharSourceText
       newPos = getNextPos sourceText pos
       commandPos = getPosOf sourceText pos
   put state{

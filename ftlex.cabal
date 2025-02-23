@@ -1,5 +1,5 @@
 name: ftlex
-version: 0.3.8
+version: 0.3.9
 cabal-version: >= 1.10
 build-type: Simple
 license: LGPL-3
