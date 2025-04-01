@@ -24,14 +24,12 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Control.Monad.State.Class (get, put, gets)
 import Text.Megaparsec hiding (Pos)
-import Data.Set (Set)
-import Data.Set qualified as Set
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import FTLex.Position
 import FTLex.Error
 import FTLex.Message
-import FTLex.Base (Lines(..), UnicodeBlock(..))
+import FTLex.Base (Lines(..), allowedChars)
 import FTLex.Base qualified as Base
 import FTLex.Helpers
 
@@ -82,50 +80,38 @@ isInvalidChar catCodeMap c =
 -- * Default Category Codes
 
 -- | Default category code mapping for FTL documents.
-defaultCatCodes :: Set UnicodeBlock -> CatCodeMap
-defaultCatCodes blocks =
-  let blocksWithBasicLatin = Set.insert BasicLatin blocks
-  in Map.fromAscList [(c, defCatCode c) |
-      c <- concatMap Base.charsOf (Set.toList blocksWithBasicLatin),
-      c `isInSomeBlockOf` blocksWithBasicLatin
-    ]
-  where
-    isInSomeBlockOf c = not . Set.null . Set.filter (Base.isInUnicodeBlock c)
+defaultCatCodes :: CatCodeMap
+defaultCatCodes = Map.fromAscList [(c, defCatCode c) | c <- allowedChars]
 
 -- | The default category code of a character.
 defCatCode :: Char -> CatCode
-defCatCode c
-  | isDefSpace c = SpaceCat
-  | isDefAlphaNum c = AlphaNumCat
-  | isDefSymbol c = SymbolCat
-defCatCode '\x0023' = CommentPrefixCat  -- '#'
+-- Spaces:
+defCatCode ' ' = SpaceCat
+defCatCode '\r' = SpaceCat
+defCatCode '\n' = SpaceCat
+defCatCode '\t' = SpaceCat
+defCatCode '\x00A0' = SpaceCat  -- Non-breakable space
+-- Comment prefixes:
+defCatCode '#' = CommentPrefixCat
+-- Alpha-numeric characters
+defCatCode c | c `elem` ['A' .. 'Z'] = AlphaNumCat
+defCatCode c | c `elem` ['a' .. 'z'] = AlphaNumCat
+defCatCode c | c `elem` ['0' .. '9'] = AlphaNumCat
+defCatCode c | c `elem` ['\x00C0' .. '\x00D6'] = AlphaNumCat
+defCatCode c | c `elem` ['\x00D8' .. '\x00F6'] = AlphaNumCat
+defCatCode c | c `elem` ['\x00F8' .. '\x00FF'] = AlphaNumCat
+-- Symbols
+defCatCode c | c `elem` ['\x0021' .. '\x0022'] = SymbolCat
+defCatCode c | c `elem` ['\x0024' .. '\x002F'] = SymbolCat
+defCatCode c | c `elem` ['\x003A' .. '\x0040'] = SymbolCat
+defCatCode c | c `elem` ['\x005B' .. '\x0060'] = SymbolCat
+defCatCode c | c `elem` ['\x007B' .. '\x007E'] = SymbolCat
+defCatCode c | c `elem` ['\x00A1' .. '\x00BF'] = SymbolCat
+defCatCode '\x00D7' = SymbolCat
+defCatCode '\x00F7' = SymbolCat
+-- Invalid characters:
 defCatCode _ = InvalidCat
 
--- | Default space characters.
-isDefSpace :: Char -> Bool
-isDefSpace c = elem c $
-     ['\x0020'] -- Space
-  ++ ['\x000A'] -- Line feed
-  -- Latin-1 Supplement:
-  ++ ['\x00A0'] -- Non-breakable space
-
--- | Default alphanumeric characters.
-isDefAlphaNum :: Char -> Bool
-isDefAlphaNum c = elem c $
-  -- Basic Latin:
-     ['\x0041' .. '\x005A'] -- 'A' – 'Z'
-  ++ ['\x0061' .. '\x007A'] -- 'a' – 'z'
-  ++ ['\x0030' .. '\x0039'] -- '0' – '9'
-  -- Latin-1 Supplement:
-  ++ ['\x00C0' .. '\x00D6'] -- 'À' – 'Ö'
-  ++ ['\x00D8' .. '\x00F6'] -- 'Ø' – 'ö'
-  ++ ['\x00F8' .. '\x00FF'] -- 'ø' – 'ÿ'
-  -- Latin Extended-A:
-  ++ ['\x0100' .. '\x017F'] -- All of Latin Extended-A
-  -- Latin Extended-B:
-  ++ ['\x0180' .. '\x024F'] -- All of Latin Extended-B
-  -- IPA Extensions:
-  ++ ['\x0250' .. '\x02AF'] -- All of IPA Extensions
 
 -- | Default symbol characters.
 isDefSymbol :: Char -> Bool
@@ -188,7 +174,7 @@ isCommentLexeme _ = False
 -- | A lexing error.
 data (Pos p) => LexingError p =
     InvalidChar Char p
-  | UnknownChar Char p (Set UnicodeBlock)
+  | UnknownChar Char p
   deriving (Eq, Ord)
 
 -- | Turn an error into a located error 
@@ -196,10 +182,9 @@ makeErrMsg :: (Pos p) => LexingError p -> LocatedMsg p
 makeErrMsg (InvalidChar char pos) =
   let msg = "Invalid character " <> codePoint char <> "."
   in (msg, pos)
-makeErrMsg (UnknownChar char pos blocks) =
+makeErrMsg (UnknownChar char pos) =
   let msg = "Unknown character " <> codePoint char <> ".\n" <>
-            "Only characters from the following Unicode blocks are allowed: " <>
-            Base.showCodeBlocks (Set.insert BasicLatin blocks)
+            "Only characters from the Unicode blocks \"Basic Latin\" and \"Latin-1 Supplement\" are allowed."
   in (msg, pos)
 
 
@@ -214,17 +199,14 @@ type FtlLexer resultType p = Base.Lexer (LexingError p) (LexingState p) resultTy
 data (Pos p) => LexingState p = LexingState{
     position :: p,
     -- ^ Current position
-    catCodes :: CatCodeMap,
+    catCodes :: CatCodeMap
     -- ^ Current category codes
-    unicodeBlocks :: Set UnicodeBlock
-    -- ^ Unicode blocks whose characters are allowed in the input text
   }
 
-initState :: (Pos p) => p -> Set UnicodeBlock -> LexingState p
-initState pos blocks = LexingState{
+initState :: (Pos p) => p -> LexingState p
+initState pos = LexingState{
     position = pos,
-    catCodes = defaultCatCodes blocks,
-    unicodeBlocks = blocks
+    catCodes = defaultCatCodes
   }
 
 
@@ -392,10 +374,9 @@ catchUnknownCharAt :: (Pos p) => p -> FtlLexer a p
 catchUnknownCharAt pos = do
   state <- get
   let cats = catCodes state
-      blocks = unicodeBlocks state
   char <- satisfy $ \c -> Map.notMember c cats
   let charPos = getPosOf (Text.singleton char) pos
-      err = UnknownChar char charPos blocks
+      err = UnknownChar char charPos
   customFailure err
 
 -- | Catch an unknown character and report it together with the current position

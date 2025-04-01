@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.0
+
+* Allow only characters from the Unicode code blocks "Basic Latin" and
+  "Latin-1 Supplement" (i.e. U+0000 to U+00FF) to occur in the input text.
+
+* In the TEX lexer, horizontal tabs (U+0009) have now default category code
+  10 (space).
+
+
 ## v0.3.9
 
 * Revert the changes made in `v0.3.8` and handle backslashed line breaks

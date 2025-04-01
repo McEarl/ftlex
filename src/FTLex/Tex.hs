@@ -44,15 +44,13 @@ import Data.Text qualified as Text
 import Control.Monad.State.Class (get, put, gets)
 import Text.Megaparsec hiding (Pos)
 import Data.Char qualified as Char
-import Data.Set (Set)
-import Data.Set qualified as Set
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isNothing, fromMaybe)
 import FTLex.Position
 import FTLex.Error
 import FTLex.Message
-import FTLex.Base (Lines(..), UnicodeBlock(..))
+import FTLex.Base (Lines(..), allowedChars)
 import FTLex.Base qualified as Base
 import FTLex.Helpers
 
@@ -187,78 +185,27 @@ isUnknownChar :: CatCodeMap -> Char -> Bool
 isUnknownChar catCodeMap c = isNothing (Map.lookup c catCodeMap)
 
 -- | Default category code mapping for TeX documents.
-defaultCatCodes :: Set UnicodeBlock -> CatCodeMap
-defaultCatCodes blocks = 
-  let blocksWithBasicLatin = Set.insert BasicLatin blocks
-  in Map.fromAscList [(c, defCatCode c) |
-      c <- concatMap Base.charsOf (Set.toList blocksWithBasicLatin),
-      c `isInSomeBlockOf` blocksWithBasicLatin
-    ]
-  where
-    isInSomeBlockOf c = not . Set.null . Set.filter (Base.isInUnicodeBlock c)
+defaultCatCodes :: CatCodeMap
+defaultCatCodes = Map.fromAscList [(c, defCatCode c) | c <- allowedChars]
 
 -- | The default category code of a character.
 defCatCode :: Char -> CatCode
-defCatCode '\x005C' = EscapeCharCat     -- '\\'
-defCatCode '\x007B' = BeginGroupCat     -- '{'
-defCatCode '\x007D' = EndGroupCat       -- '}'
-defCatCode '\x0024' = MathShiftCat      -- '$'
-defCatCode '\x0026' = AlignTabCat       -- '&'
-defCatCode '\x000D' = EndOfLineCat      -- Carriage Return
-defCatCode '\x0023' = ParamCharCat      -- '#'
-defCatCode '\x005E' = SuperscriptCat    -- '^'
-defCatCode '\x005F' = SubscriptCat      -- '_'
-defCatCode '\x0000' = IgnoredCat        -- Null Character
-defCatCode c
-  | isDefSpace c = SpaceCat
-  | isDefLetter c = LetterCat
-  | isDefOther c = OtherCat
-defCatCode '\x007E' = ActiveCat         -- '~'
-defCatCode '\x0025' = CommentPrefixCat  -- '%'
-defCatCode _ = InvalidCat
-
--- | Default space characters.
-isDefSpace :: Char -> Bool
-isDefSpace c = elem c $
-     ['\x0020']  -- Space
-  -- Latin-1 Supplement:
-  ++ ['\x00A0'] -- Non-breakable space
-
--- | Default alphanumeric characters.
-isDefLetter :: Char -> Bool
-isDefLetter c = elem c $
-  -- Basic Latin:
-     ['\x0041' .. '\x005A'] -- 'A' – 'Z'
-  ++ ['\x0061' .. '\x007A'] -- 'a' – 'z'
-  -- Latin-1 Supplement:
-  ++ ['\x00C0' .. '\x00D6'] -- 'À' – 'Ö'
-  ++ ['\x00D8' .. '\x00F6'] -- 'Ø' – 'ö'
-  ++ ['\x00F8' .. '\x00FF'] -- 'ø' – 'ÿ'
-  -- Latin Extended-A:
-  ++ ['\x0100' .. '\x017F'] -- All of Latin Extended-A
-  -- Latin Extended-B:
-  ++ ['\x0180' .. '\x024F'] -- All of Latin Extended-B
-  -- IPA Extensions:
-  ++ ['\x0250' .. '\x02AF'] -- All of IPA Extensions
-
--- | Default other characters.
-isDefOther :: Char -> Bool
-isDefOther c = elem c $
-  -- Basic Latin:
-     ['\x0001' .. '\x000C'] -- C0 Controls (before Carriage Return)
-  ++ ['\x000E' .. '\x001F'] -- C0 Controls (after Carriage Return)
-  ++ ['\x0021' .. '\x0022'] -- '!' – '"'
-  ++ ['\x0027' .. '\x002F'] -- '\'' – '/'
-  ++ ['\x0030' .. '\x0039'] -- '0' – '9'
-  ++ ['\x003A' .. '\x0040'] -- ':' – '@'
-  ++ ['\x005B']             -- '['
-  ++ ['\x005D' .. '\x0060'] -- ']' – '`'
-  ++ ['\x007C']             -- '|'
-  -- Latin-1 Supplement:
-  ++ ['\x0080' .. '\x00BF'] -- C1 Controls 
-  ++ ['\x00A1' .. '\x00F6'] -- '¡' – '¿'
-  ++ ['\x00D7']             -- '×'
-  ++ ['\x00F7']             -- '÷'
+defCatCode '\\' = EscapeCharCat
+defCatCode '{' = BeginGroupCat
+defCatCode '}' = EndGroupCat
+defCatCode '$' = MathShiftCat
+defCatCode '&' = AlignTabCat
+defCatCode '\r' = EndOfLineCat
+defCatCode '#' = ParamCharCat
+defCatCode '^' = SuperscriptCat
+defCatCode '_' = SubscriptCat
+defCatCode '\t' = SpaceCat
+defCatCode ' ' = SpaceCat
+defCatCode c | c `elem` ['A' .. 'Z'] ++ ['a' .. 'z'] = LetterCat
+defCatCode '~' = ActiveCat
+defCatCode '%' = CommentPrefixCat
+defCatCode '\NUL' = InvalidCat
+defCatCode _ = OtherCat
 
 
 -- * Lexemes
@@ -417,7 +364,7 @@ isInvalidCharLexeme _ = False
 -- | A lexing error.
 data (Pos p) => LexingError p =
     InvalidChar Char p
-  | UnknownChar Char p (Set UnicodeBlock)
+  | UnknownChar Char p
   deriving (Eq, Ord)
 
 -- | Turn an error into a located error 
@@ -425,10 +372,9 @@ makeErrMsg :: (Pos p) => LexingError p -> LocatedMsg p
 makeErrMsg (InvalidChar char pos) =
   let msg = "Invalid character " <> codePoint char <> "."
   in (msg, pos)
-makeErrMsg (UnknownChar char pos blocks) =
+makeErrMsg (UnknownChar char pos) =
   let msg = "Unknown character " <> codePoint char <> ".\n" <>
-            "Only characters from the following Unicode blocks are allowed: " <>
-            Base.showCodeBlocks (Set.insert BasicLatin blocks)
+            "Only characters from the Unicode blocks \"Basic Latin\" and \"Latin-1 Supplement\" are allowed."
   in (msg, pos)
 
 
@@ -452,20 +398,17 @@ data (Pos p) => LexingState p = LexingState{
     -- ^ Current category codes
     inputState :: InputState,
     -- ^ Current input state
-    endlineChar :: Maybe Char,
+    endlineChar :: Maybe Char
     -- ^ Current value of @\\endlinechar@
-    unicodeBlocks :: Set UnicodeBlock
-    -- ^ Unicode blocks whose characters are allowed in the input text
   }
 
 -- | The initial lexing state.
-initState :: (Pos p) => p -> Set UnicodeBlock -> LexingState p
-initState pos blocks = LexingState{
+initState :: (Pos p) => p -> LexingState p
+initState pos = LexingState{
     position = pos,
-    catCodes = defaultCatCodes blocks,
+    catCodes = defaultCatCodes,
     inputState = NewLine,
-    endlineChar = Just '\r',
-    unicodeBlocks = blocks
+    endlineChar = Just '\r'
   }
 
 
@@ -946,10 +889,9 @@ catchUnknownCharAt :: (Pos p) => p -> TexLexer a p
 catchUnknownCharAt pos = do
   state <- get
   let cats = catCodes state
-      blocks = unicodeBlocks state
   char <- satisfy $ \c -> Map.notMember c cats
   let charPos = getPosOf (Text.singleton char) pos
-      err = UnknownChar char charPos blocks
+      err = UnknownChar char charPos
   customFailure err
 
 -- | Catch an unknown character and report it together with the current position

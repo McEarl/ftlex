@@ -11,18 +11,13 @@ module FTLex.Base (
   runLexer,
   Lines(..),
   splitText,
-  UnicodeBlock(..),
-  isInUnicodeBlock,
-  showCodeBlocks,
-  charsOf
+  allowedChars
 ) where
 
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Control.Monad.Trans.State.Strict (evalState, State)
 import Text.Megaparsec hiding (State, Pos, label)
-import Data.Set (Set)
-import Data.Set qualified as Set
 
 
 type Lexer errorType stateType resultType = ParsecT errorType Text (State stateType) resultType
@@ -65,36 +60,6 @@ splitText text =
     Just ('\n', rest') -> MiddleLine beforeBreak "\n" $ splitText rest'
     _ -> LastLine beforeBreak
 
-
--- * Unicode Blocks
-
--- | Unicode blocks.
-data UnicodeBlock =
-    BasicLatin        -- ^ Basic Latin characters
-  | Latin1Supplement  -- ^ Latin-1 Supplement characters
-  | LatinExtendedA    -- ^ Latin Extended-A
-  | LatinExtendedB    -- ^ Latin Extended-B
-  | IPAExtensions     -- ^ IPA Extensions
-  deriving (Eq, Ord)
-
--- | List all elements of a Set of Unicode blocks.
-showCodeBlocks :: Set UnicodeBlock -> Text
-showCodeBlocks blocks = Text.intercalate ", " (map showBlock $ Set.toList blocks)
-  where
-    showBlock BasicLatin = "Basic Latin"
-    showBlock Latin1Supplement = "Latin-1 Supplement"
-    showBlock LatinExtendedA = "Latin Extended-A"
-    showBlock LatinExtendedB = "Latin Extended-B"
-    showBlock IPAExtensions = "IPA Extensions"
-
--- | Check whether a character is contained in a Unicode block.
-isInUnicodeBlock :: Char -> UnicodeBlock -> Bool
-isInUnicodeBlock c block = c `elem` charsOf block
-
--- | All characters of a Unicode block.
-charsOf :: UnicodeBlock -> [Char]
-charsOf BasicLatin = ['\x0000' .. '\x007F']
-charsOf Latin1Supplement = ['\x0080' .. '\x00FF']
-charsOf LatinExtendedA = ['\x0100' .. '\x017F']
-charsOf LatinExtendedB = ['\x0180' .. '\x024F']
-charsOf IPAExtensions = ['\x0250' .. '\x02AF']
+-- | Characters that are allowed to occur in the input text.
+allowedChars :: [Char]
+allowedChars = ['\x0000' .. '\x00FF']

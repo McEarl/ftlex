@@ -8,13 +8,10 @@ import System.FilePath
 import Data.Text.IO (putStrLn, getLine, hGetContents)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Set (Set)
-import Data.Set qualified as Set
 import FTLex.Ftl qualified as FTL
 import FTLex.Tex qualified as TEX
 import FTLex.Position
 import FTLex.Message
-import FTLex.Base
 import FTLex.Debug
 
 
@@ -28,8 +25,8 @@ main = do
   input <- hGetContents inputH
   hClose inputH
   debugOutput <- case splitExtensions fileArg of
-    (_, ".ftl") -> showFtlLexemes <$> FTL.runLexer initPos input (FTL.initState initPos initUnicodeBlocks)
-    (_, ".ftl.tex") -> showTexLexemes <$> TEX.runLexer initPos input (TEX.initState initPos initUnicodeBlocks)
+    (_, ".ftl") -> showFtlLexemes <$> FTL.runLexer initPos input (FTL.initState initPos)
+    (_, ".ftl.tex") -> showTexLexemes <$> TEX.runLexer initPos input (TEX.initState initPos)
     (_, ext) -> failWith $ "\nInvalid file name extension \"" <> Text.pack ext <> "\". Only \".ftl\" or \".ftl.tex\" are allowed.\n" <> usageInfo
   putStrLn $ "\n" <> debugOutput
   putStr "\nIs the above output correct? (y/n) "
@@ -42,9 +39,6 @@ main = do
     _ -> failWith "Invalid answer.\nTest failed.\n"
   where
     initPos = SimplePosition 1 1
-
-initUnicodeBlocks :: Set UnicodeBlock
-initUnicodeBlocks = Set.fromList [Latin1Supplement]
 
 usageInfo :: Text
 usageInfo =
