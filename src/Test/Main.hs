@@ -26,8 +26,12 @@ main = do
   hClose inputH
   debugOutput <- case splitExtensions fileArg of
     (_, ".ftl") -> showFtlLexemes <$> FTL.runLexer initPos input (FTL.initState initPos)
-    (_, ".ftl.tex") -> showTexLexemes <$> TEX.runLexer initPos input (TEX.initState initPos)
-    (_, ext) -> failWith $ "\nInvalid file name extension \"" <> Text.pack ext <> "\". Only \".ftl\" or \".ftl.tex\" are allowed.\n" <> usageInfo
+    (_, ".ftl.tex") -> showTexLexemes <$> TEX.runLexer initPos input (TEX.initState TEX.FtlTexMode initPos)
+    (_, ".tex") -> showTexLexemes <$> TEX.runLexer initPos input (TEX.initState TEX.TexMode initPos)
+    (_, ext) -> failWith $
+      "\nInvalid file name extension \"" <> Text.pack ext <> "\". " <>
+      "Only \".ftl\", \".ftl.tex\" and \".tex\" are allowed.\n" <>
+      usageInfo
   putStrLn $ "\n" <> debugOutput
   putStr "\nIs the above output correct? (y/n) "
   hFlush stdout
@@ -42,7 +46,7 @@ main = do
 
 usageInfo :: Text
 usageInfo =
-  "Usage: cabal test --test-options=\"<path to ForTheL file> (FTL|TEX)\"\n"
+  "Usage: cabal test --test-options=\"<path to (.ftl|.ftl.tex|.tex) file>\"\n"
 
 failWith :: Text -> IO a
 failWith msg = putStrLn msg >> hFlush stdout >> exitFailure

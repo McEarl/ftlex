@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.5.0
+
+* Provide two modes in which the TEX lexer can run:
+
+  - `TexMode`: In this mode the lexer behaves like a proper TeX engine (modulo
+    the parts of the TeX engine that are not yet implemented).
+
+  - `FtlTexMode`: In this mode some adaptions are made to `TexMode` to imitate
+    certain LaTeX features during lexing.
+    (Currently only the initial category codes are adapted:
+    `\NUL` becomes an invalid, `\DEL` an other, and `\t` a space character.)
+
+
 ## v0.4.0
 
 * Allow only characters from the Unicode code blocks "Basic Latin" and

@@ -7,6 +7,7 @@
 -- TeX Lexer
 
 module FTLex.Tex (
+  Mode(..),
   CatCode(..),
   CatCodeMap,
   defaultCatCodes,
@@ -53,6 +54,18 @@ import FTLex.Message
 import FTLex.Base (Lines(..), allowedChars)
 import FTLex.Base qualified as Base
 import FTLex.Helpers
+
+
+-- * Lexing Modes
+
+-- | Different modes in which the lexer can be run.
+data Mode =
+    TexMode
+    -- ^ In this mode the lexer behaves like a proper TeX engine (modulo the
+    -- parts of the TeX engine that are not yet implemented).
+  | FtlTexMode
+    -- ^ In this mode some adaptions are made to @TexMode@ to imitate certain
+    -- LaTeX features during lexing.
 
 
 -- * Category Codes
@@ -185,27 +198,48 @@ isUnknownChar :: CatCodeMap -> Char -> Bool
 isUnknownChar catCodeMap c = isNothing (Map.lookup c catCodeMap)
 
 -- | Default category code mapping for TeX documents.
-defaultCatCodes :: CatCodeMap
-defaultCatCodes = Map.fromAscList [(c, defCatCode c) | c <- allowedChars]
+defaultCatCodes :: Mode -> CatCodeMap
+defaultCatCodes mode = Map.fromAscList [(c, defCatCode mode c) | c <- allowedChars]
 
--- | The default category code of a character.
-defCatCode :: Char -> CatCode
-defCatCode '\\' = EscapeCharCat
-defCatCode '{' = BeginGroupCat
-defCatCode '}' = EndGroupCat
-defCatCode '$' = MathShiftCat
-defCatCode '&' = AlignTabCat
-defCatCode '\r' = EndOfLineCat
-defCatCode '#' = ParamCharCat
-defCatCode '^' = SuperscriptCat
-defCatCode '_' = SubscriptCat
-defCatCode '\t' = SpaceCat
-defCatCode ' ' = SpaceCat
-defCatCode c | c `elem` ['A' .. 'Z'] ++ ['a' .. 'z'] = LetterCat
-defCatCode '~' = ActiveCat
-defCatCode '%' = CommentPrefixCat
-defCatCode '\NUL' = InvalidCat
-defCatCode _ = OtherCat
+-- | The default category code of a character, where a character is regarded
+-- as an element of @['\x0000' .. '\x00FF']@.
+defCatCode :: Mode -> Char -> CatCode
+-- @TexMode@:
+defCatCode TexMode '\\' = EscapeCharCat
+defCatCode TexMode '{' = BeginGroupCat
+defCatCode TexMode '}' = EndGroupCat
+defCatCode TexMode '$' = MathShiftCat
+defCatCode TexMode '&' = AlignTabCat
+defCatCode TexMode '\r' = EndOfLineCat
+defCatCode TexMode '#' = ParamCharCat
+defCatCode TexMode '^' = SuperscriptCat
+defCatCode TexMode '_' = SubscriptCat
+defCatCode TexMode ' ' = SpaceCat
+defCatCode TexMode c | c `elem` ['A' .. 'Z'] = LetterCat
+defCatCode TexMode c | c `elem` ['a' .. 'z'] = LetterCat
+defCatCode TexMode '~' = ActiveCat
+defCatCode TexMode '%' = CommentPrefixCat
+defCatCode TexMode '\NUL' = IgnoredCat
+defCatCode TexMode '\DEL' = InvalidCat
+defCatCode TexMode _ = OtherCat
+-- @FtlTexMode@:
+defCatCode FtlTexMode '\\' = EscapeCharCat
+defCatCode FtlTexMode '{' = BeginGroupCat
+defCatCode FtlTexMode '}' = EndGroupCat
+defCatCode FtlTexMode '$' = MathShiftCat
+defCatCode FtlTexMode '&' = AlignTabCat
+defCatCode FtlTexMode '\r' = EndOfLineCat
+defCatCode FtlTexMode '#' = ParamCharCat
+defCatCode FtlTexMode '^' = SuperscriptCat
+defCatCode FtlTexMode '_' = SubscriptCat
+defCatCode FtlTexMode '\t' = SpaceCat
+defCatCode FtlTexMode ' ' = SpaceCat
+defCatCode FtlTexMode c | c `elem` ['A' .. 'Z'] = LetterCat
+defCatCode FtlTexMode c | c `elem` ['a' .. 'z'] = LetterCat
+defCatCode FtlTexMode '~' = ActiveCat
+defCatCode FtlTexMode '%' = CommentPrefixCat
+defCatCode FtlTexMode '\NUL' = InvalidCat
+defCatCode FtlTexMode _ = OtherCat
 
 
 -- * Lexemes
@@ -403,10 +437,10 @@ data (Pos p) => LexingState p = LexingState{
   }
 
 -- | The initial lexing state.
-initState :: (Pos p) => p -> LexingState p
-initState pos = LexingState{
+initState :: (Pos p) => Mode -> p -> LexingState p
+initState mode pos = LexingState{
     position = pos,
-    catCodes = defaultCatCodes,
+    catCodes = defaultCatCodes mode,
     inputState = NewLine,
     endlineChar = Just '\r'
   }
