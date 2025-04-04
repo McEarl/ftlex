@@ -113,21 +113,6 @@ defCatCode '\x00F7' = SymbolCat
 defCatCode _ = InvalidCat
 
 
--- | Default symbol characters.
-isDefSymbol :: Char -> Bool
-isDefSymbol c = elem c $
-  -- Basic Latin:
-     ['\x0021' .. '\x0022'] -- '!' – '"'
-  ++ ['\x0024' .. '\x002F'] -- '$' – '/'
-  ++ ['\x003A' .. '\x0040'] -- ':' – '@'
-  ++ ['\x005B' .. '\x0060'] -- '[' – '`'
-  ++ ['\x007B' .. '\x007E'] -- '{' – '~'
-  -- Latin-1 Supplement:
-  ++ ['\x00A1' .. '\x00BF'] -- '¡' – '¿'
-  ++ ['\x00D7']             -- '×'
-  ++ ['\x00F7']             -- '÷'
-
-
 -- * Lexemes
 
 data (Pos p) => Lexeme p =
