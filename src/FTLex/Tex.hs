@@ -37,7 +37,8 @@ module FTLex.Tex (
   isOtherCharLexeme,
   isActiveCharLexeme,
   isCommentPrefixCharLexeme,
-  isInvalidCharLexeme
+  isInvalidCharLexeme,
+  isIsabelleSymbolLexeme
 ) where
 
 import Data.Text (Text)
@@ -282,6 +283,11 @@ data (Pos p) => Lexeme p =
       sourceText :: Text,
       sourcePos :: p
     } -- ^ Comment
+  | IsabelleSymbol{
+      isabelleSymbolContent :: Text,
+      sourceText :: Text,
+      sourcePos :: p
+    } -- ^ "Isabelle symbol"
   deriving (Eq, Ord, Show)
 
 isCharacterLexeme :: (Pos p) => Lexeme p -> Bool
@@ -392,6 +398,10 @@ isInvalidCharLexeme Character{charCatCode = catCode}
   | catCode == InvalidCat = True
 isInvalidCharLexeme _ = False
 
+isIsabelleSymbolLexeme :: (Pos p) => Lexeme p -> Bool
+isIsabelleSymbolLexeme IsabelleSymbol{} = True
+isIsabelleSymbolLexeme _ = False
+
 
 -- * Errors
 
@@ -399,6 +409,7 @@ isInvalidCharLexeme _ = False
 data (Pos p) => LexingError p =
     InvalidChar Char p
   | UnknownChar Char p
+  | InvalidIsabelleSymbol Text p
   deriving (Eq, Ord)
 
 -- | Turn an error into a located error 
@@ -409,6 +420,9 @@ makeErrMsg (InvalidChar char pos) =
 makeErrMsg (UnknownChar char pos) =
   let msg = "Unknown character " <> codePoint char <> ".\n" <>
             "Only characters from the Unicode blocks \"Basic Latin\" and \"Latin-1 Supplement\" are allowed."
+  in (msg, pos)
+makeErrMsg (InvalidIsabelleSymbol text pos) =
+  let msg = "Invalid Isabelle symbol " <> text <> "."
   in (msg, pos)
 
 
@@ -426,6 +440,8 @@ data InputState =
 
 -- | The current lexing state.
 data (Pos p) => LexingState p = LexingState{
+    mode :: Mode,
+    -- ^ The mode in which the parser is executed
     position :: p,
     -- ^ Current position
     catCodes :: CatCodeMap,
@@ -439,6 +455,7 @@ data (Pos p) => LexingState p = LexingState{
 -- | The initial lexing state.
 initState :: (Pos p) => Mode -> p -> LexingState p
 initState mode pos = LexingState{
+    mode = mode,
     position = pos,
     catCodes = defaultCatCodes mode,
     inputState = NewLine,
@@ -560,7 +577,11 @@ texLine = do
 -- ** Control Sequences
 
 controlSequence :: (Pos p) => TexLexer [Lexeme p] p
-controlSequence = try controlWord <|> try controlSymbol <|> try controlSpace <|> controlSpace'
+controlSequence = do
+  mode <- gets mode
+  case mode of
+    TexMode -> try controlWord <|> try controlSymbol <|> try controlSpace <|> controlSpace'
+    FtlTexMode -> try controlWord <|> try isabelleSymbol <|> try controlSymbol <|> try controlSpace <|> controlSpace'
 
 controlWord :: (Pos p) => TexLexer [Lexeme p] p
 controlWord = do
@@ -872,6 +893,28 @@ comment = do
       inputState = SkippingSpaces
     }
   return [commentLexeme]--, skippedLineBreak]
+
+isabelleSymbol :: (Pos p) => TexLexer [Lexeme p] p
+isabelleSymbol = do
+  state <- get
+  cats <- gets catCodes
+  let pos = position state
+  (escapeChar, escapeCharSourceText) <- satisfy' $ isEscapeChar cats
+  (lessChar, lessCharSourceText) <- satisfy' (== '<')
+  (identifier, identifierSourceText) <- satisfySome' (\c -> c == '^' || isLetter cats c)
+  (greaterChar, greaterCharSourceText) <- satisfy' (== '>')
+  let sourceText = escapeCharSourceText <> lessCharSourceText <> identifierSourceText <> greaterCharSourceText
+      newPos = getNextPos sourceText pos
+      isabelleSymbolPos = getPosOf sourceText pos
+  put state{
+      position = newPos,
+      inputState = MiddleOfLine
+    }
+  return $ singleton IsabelleSymbol{
+      isabelleSymbolContent = identifier,
+      sourceText = sourceText,
+      sourcePos = isabelleSymbolPos
+  }
 
 
 -- ** Ignored Characters

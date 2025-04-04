@@ -24,10 +24,16 @@ import FTLex.Position
 -- | Show a list of FTL lexemes.
 showFtlLexemes :: (Pos p) => [FTL.Lexeme p] -> Text
 showFtlLexemes = Text.intercalate "\n" . map showLexeme
-  where 
+  where
     showLexeme (FTL.Symbol content sourceText sourcePos) =
       "Symbol [\n" <>
       "  Content         : " <> showChar content <> "\n" <>
+      "  Source Text     : " <> (Text.pack . show . Text.unpack) sourceText <> "\n" <>
+      "  Source Position : " <> showPos sourcePos <> "\n" <>
+      "]"
+    showLexeme (FTL.IsabelleSymbol content sourceText sourcePos) =
+      "Symbol [\n" <>
+      "  Content         : " <> showText content <> "\n" <>
       "  Source Text     : " <> (Text.pack . show . Text.unpack) sourceText <> "\n" <>
       "  Source Position : " <> showPos sourcePos <> "\n" <>
       "]"
@@ -93,6 +99,12 @@ showTexLexemes = Text.intercalate "\n" . map showLexeme
       "]"
     showLexeme (TEX.Comment content sourceText sourcePos) =
       "Comment [\n" <>
+      "  Content         : " <> showText content <> "\n" <>
+      "  Source Text     : " <> showText sourceText <> "\n" <>
+      "  Source Position : " <> showPos sourcePos <> "\n" <>
+      "]"
+    showLexeme (TEX.IsabelleSymbol content sourceText sourcePos) =
+      "Isabelle Symbol [\n" <>
       "  Content         : " <> showText content <> "\n" <>
       "  Source Text     : " <> showText sourceText <> "\n" <>
       "  Source Position : " <> showPos sourcePos <> "\n" <>

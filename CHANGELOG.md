@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.0
+
+* Isabelle symbols (e.g. `\<in>`) are treated as a new kind of lexemes by the
+  FTL and, when in `FtlTexMode`, also by the TEX lexer.
+
+
 ## v0.5.0
 
 * Provide two modes in which the TEX lexer can run:

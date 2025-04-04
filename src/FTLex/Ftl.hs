@@ -15,6 +15,7 @@ module FTLex.Ftl (
   LexingState(..),
   Lexeme(..),
   isSymbolLexeme,
+  isIsabelleSymbolLexeme,
   isWordLexeme,
   isSpaceLexeme,
   isCommentLexeme
@@ -24,6 +25,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Control.Monad.State.Class (get, put, gets)
 import Text.Megaparsec hiding (Pos)
+import Text.Megaparsec.Char (char)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import FTLex.Position
@@ -39,7 +41,8 @@ import FTLex.Helpers
 -- | TeX-like Category codes.
 data CatCode =
     SpaceCat          -- ^ Horizontal space
-  | AlphaNumCat       -- ^ Alphanumeric charcter
+  | LetterCat         -- ^ Letter
+  | DigitCat          -- ^ Digit
   | SymbolCat         -- ^ Symbol
   | CommentPrefixCat  -- ^ Comment prefix
   | InvalidCat        -- ^ Invalid character
@@ -54,11 +57,21 @@ isSpace :: CatCodeMap -> Char -> Bool
 isSpace catCodeMap c =
   Map.lookup c catCodeMap == Just SpaceCat
 
+-- | Checks whether a character is a letter wrt. a given  category code mapping.
+isLetterChar :: CatCodeMap -> Char -> Bool
+isLetterChar catCodeMap c =
+  Map.lookup c catCodeMap == Just LetterCat
+
+-- | Checks whether a character is a digit wrt. a given category code mapping.
+isDigitChar :: CatCodeMap -> Char -> Bool
+isDigitChar catCodeMap c =
+  Map.lookup c catCodeMap == Just DigitCat
+
 -- | Checks whether a character is an alpha-numeric character wrt. a given 
 -- category code mapping.
 isAlphanumChar :: CatCodeMap -> Char -> Bool
 isAlphanumChar catCodeMap c =
-  Map.lookup c catCodeMap == Just AlphaNumCat
+  Map.lookup c catCodeMap `elem` [Just LetterCat, Just DigitCat]
 
 -- | Checks whether a character is a symbol wrt. a given category code mapping.
 isSymbol :: CatCodeMap -> Char -> Bool
@@ -93,19 +106,22 @@ defCatCode '\t' = SpaceCat
 defCatCode '\x00A0' = SpaceCat  -- Non-breakable space
 -- Comment prefixes:
 defCatCode '#' = CommentPrefixCat
--- Alpha-numeric characters
-defCatCode c | c `elem` ['A' .. 'Z'] = AlphaNumCat
-defCatCode c | c `elem` ['a' .. 'z'] = AlphaNumCat
-defCatCode c | c `elem` ['0' .. '9'] = AlphaNumCat
-defCatCode c | c `elem` ['\x00C0' .. '\x00D6'] = AlphaNumCat
-defCatCode c | c `elem` ['\x00D8' .. '\x00F6'] = AlphaNumCat
-defCatCode c | c `elem` ['\x00F8' .. '\x00FF'] = AlphaNumCat
--- Symbols
+-- Digits:
+defCatCode c | c `elem` ['0' .. '9'] = DigitCat
+-- Basic Latin letters:
+defCatCode c | c `elem` ['A' .. 'Z'] = LetterCat
+defCatCode c | c `elem` ['a' .. 'z'] = LetterCat
+-- Latin-1 Supplement letters:
+defCatCode c | c `elem` ['\x00C0' .. '\x00D6'] = LetterCat
+defCatCode c | c `elem` ['\x00D8' .. '\x00F6'] = LetterCat
+defCatCode c | c `elem` ['\x00F8' .. '\x00FF'] = LetterCat
+-- Basic Latin symbols:
 defCatCode c | c `elem` ['\x0021' .. '\x0022'] = SymbolCat
 defCatCode c | c `elem` ['\x0024' .. '\x002F'] = SymbolCat
 defCatCode c | c `elem` ['\x003A' .. '\x0040'] = SymbolCat
 defCatCode c | c `elem` ['\x005B' .. '\x0060'] = SymbolCat
 defCatCode c | c `elem` ['\x007B' .. '\x007E'] = SymbolCat
+-- Latin-1 Supplement symbols:
 defCatCode c | c `elem` ['\x00A1' .. '\x00BF'] = SymbolCat
 defCatCode '\x00D7' = SymbolCat
 defCatCode '\x00F7' = SymbolCat
@@ -121,6 +137,11 @@ data (Pos p) => Lexeme p =
       sourceText :: Text,
       sourcePos :: p
     } -- ^ A symbol
+  | IsabelleSymbol{
+      isabelleSymbolContent :: Text,
+      sourceText :: Text,
+      sourcePos :: p
+    } -- ^ An "Isabelle symbol"
   | Word{
       wordContent :: Text,
       sourceText :: Text,
@@ -140,6 +161,10 @@ data (Pos p) => Lexeme p =
 isSymbolLexeme :: (Pos p) => Lexeme p -> Bool
 isSymbolLexeme Symbol{} = True
 isSymbolLexeme _ = False
+
+isIsabelleSymbolLexeme :: (Pos p) => Lexeme p -> Bool
+isIsabelleSymbolLexeme IsabelleSymbol{} = True
+isIsabelleSymbolLexeme _ = False
 
 isWordLexeme :: (Pos p) => Lexeme p -> Bool
 isWordLexeme Word{} = True
@@ -240,6 +265,7 @@ ftlLine = do
       comment,
       space,
       word,
+      try isabelleSymbol,
       symbol,
       catchInvalidChar,
       catchUnknownChar
@@ -315,6 +341,30 @@ word = do
       sourceText = lexeme,
       sourcePos = lexemePos
     }
+
+-- | An "Isabelle symbol": A string of the form @\<identifier>@, where
+-- @identifier@ is an element of @isabelleSymbols@.
+isabelleSymbol :: (Pos p) => FtlLexer (Lexeme p) p
+isabelleSymbol = do
+  state <- get
+  let pos = position state
+      cats = catCodes state
+  char '\\'
+  char '<'
+  identifier <- Text.pack <$> some (satisfy (\c -> c == '^' || isLetterChar cats c))
+  char '>'
+  let sourceText = "\\<" <> identifier <> ">"
+      newPos = getNextPos sourceText pos
+      isabelleSymbolPos = getPosOf sourceText pos
+  put state{
+      position = newPos
+    }
+  return $ IsabelleSymbol{
+      isabelleSymbolContent = identifier,
+      sourceText = sourceText,
+      sourcePos = isabelleSymbolPos
+    }
+
 
 -- | A symbol: Any singleton ASCII symbol character.
 symbol :: (Pos p) => FtlLexer (Lexeme p) p
