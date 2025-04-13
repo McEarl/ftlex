@@ -1,6 +1,6 @@
 -- |
 -- Module      : FTLex.Error
--- Copyright   : (c) 2024, Marcel Schütz
+-- Copyright   : (c) 2024-2025, Marcel Schütz
 -- License     : LGPL-3
 -- Maintainer  : marcel.schuetz@fau.de
 --
@@ -11,7 +11,6 @@ module FTLex.Error (
 ) where
 
 import Text.Megaparsec.Error
-import Data.Text (Text)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.List.NonEmpty as NonEmpty
@@ -20,14 +19,14 @@ import FTLex.Position
 
 
 -- | Report a lexing error.
-handleError :: (Msg p m) => (error -> LocatedMsg p) -> ParseErrorBundle Text error -> m a
+handleError :: (Msg p m) => (error -> LocatedMsg p) -> ParseErrorBundle b error -> m a
 handleError errorHandler errors = do
   let (errorMsg, errorPos) = showError errors errorHandler
   errorLexer errorPos errorMsg
 
 -- | Return an error message and the position of the first error that occured
 -- during lexing.
-showError :: (Pos p) => ParseErrorBundle Text error -> (error -> LocatedMsg p) -> LocatedMsg p
+showError :: (Pos p) => ParseErrorBundle b error -> (error -> LocatedMsg p) -> LocatedMsg p
 showError (ParseErrorBundle parseErrors _) errorHandler = case NonEmpty.head parseErrors of
   TrivialError{} -> unknownError
   FancyError _ errs -> properError errorHandler errs

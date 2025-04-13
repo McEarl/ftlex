@@ -1,6 +1,6 @@
 -- |
 -- Module      : FTLex.Helpers
--- Copyright   : (c) 2024, Marcel Schütz
+-- Copyright   : (c) 2024-2025, Marcel Schütz
 -- License     : LGPL-3
 -- Maintainer  : marcel.schuetz@fau.de
 --
@@ -14,9 +14,13 @@ module FTLex.Helpers (
   fromHex,
   codePoint,
   singleton,
-  pair
+  pair,
+  showText,
+  showChar,
+  showNumber
 ) where
 
+import Prelude hiding (showChar)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Char qualified as Char
@@ -85,3 +89,12 @@ singleton x = [x]
 -- | A pair.
 pair :: a -> b -> (a, b)
 pair x y = (x, y)
+
+showText :: Text -> Text
+showText = Text.pack . show . Text.unpack
+
+showChar :: Char -> Text
+showChar c = Text.pack . show $ [c]
+
+showNumber :: Int -> Text
+showNumber = Text.pack . show

@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.0
+
+* The module structure was completely refactored.
+
+* Isabelle symbols are no longer treated as a new kind of lexemes.
+
+* The lexers now accept all characters from the Unicode blocks *Basic Latin* and
+  *Latin-1 Supplement* plus all Unicode characters that correspond to Isabelle
+  symbols.
+
+
 ## v0.6.0
 
 * Isabelle symbols (e.g. `\<in>`) are treated as a new kind of lexemes by the

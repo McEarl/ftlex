@@ -1,44 +1,13 @@
 -- |
--- Module      : FTLex.Tex
--- Copyright   : (c) 2024, Marcel Schütz
+-- Module      : FTLex.Lexer.FTLTEX.Lexer
+-- Copyright   : (c) 2024-2025, Marcel Schütz
 -- License     : LGPL-3
 -- Maintainer  : marcel.schuetz@fau.de
 --
--- TeX Lexer
+-- Lexing the input text.
 
-module FTLex.Tex (
-  Mode(..),
-  CatCode(..),
-  CatCodeMap,
-  defaultCatCodes,
-  runLexer,
-  LexingState(..),
-  initState,
-  Lexeme(..),
-  isCharacterLexeme,
-  isControlWordLexeme,
-  isControlSymbolLexeme,
-  isControlSpaceLexeme,
-  isParameterLexeme,
-  isSkippedLexeme,
-  isCommentLexeme,
-  isEscapeCharLexeme,
-  isBeginGroupCharLexeme,
-  isEndGroupCharLexeme,
-  isMathShiftCharLexeme,
-  isAlignTabCharLexeme,
-  isEndOfLineCharLexeme,
-  isParamCharLexeme,
-  isSuperscriptCharLexeme,
-  isSubscriptCharLexeme,
-  isIgnoredCharLexeme,
-  isSpaceCharLexeme,
-  isLetterCharLexeme,
-  isOtherCharLexeme,
-  isActiveCharLexeme,
-  isCommentPrefixCharLexeme,
-  isInvalidCharLexeme,
-  isIsabelleSymbolLexeme
+module FTLex.Lexer.FTLTEX.Lexer (
+  runLexer
 ) where
 
 import Data.Text (Text)
@@ -46,361 +15,16 @@ import Data.Text qualified as Text
 import Control.Monad.State.Class (get, put, gets)
 import Text.Megaparsec hiding (Pos)
 import Data.Char qualified as Char
-import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (isNothing, fromMaybe)
+import Data.Maybe (fromMaybe)
+import FTLex.Lexer.TEX.Characters
+import FTLex.Lexer.TEX.Lexemes
 import FTLex.Position
 import FTLex.Error
 import FTLex.Message
-import FTLex.Base (Lines(..), allowedChars)
-import FTLex.Base qualified as Base
+import FTLex.Lexer.Base (Lines(..))
+import FTLex.Lexer.Base qualified as Base
 import FTLex.Helpers
-
-
--- * Lexing Modes
-
--- | Different modes in which the lexer can be run.
-data Mode =
-    TexMode
-    -- ^ In this mode the lexer behaves like a proper TeX engine (modulo the
-    -- parts of the TeX engine that are not yet implemented).
-  | FtlTexMode
-    -- ^ In this mode some adaptions are made to @TexMode@ to imitate certain
-    -- LaTeX features during lexing.
-
-
--- * Category Codes
-
--- | Category Codes.
-data CatCode =
-    EscapeCharCat     -- ^  0: Escape character
-  | BeginGroupCat     -- ^  1: Begin group character
-  | EndGroupCat       -- ^  2: End group character
-  | MathShiftCat      -- ^  3: Math shift character
-  | AlignTabCat       -- ^  4: Alignment tab
-  | EndOfLineCat      -- ^  5: Line break
-  | ParamCharCat      -- ^  6: Parameter character
-  | SuperscriptCat    -- ^  7: Superscript character
-  | SubscriptCat      -- ^  8: Subscript character
-  | IgnoredCat        -- ^  9: Ignored character
-  | SpaceCat          -- ^ 10: Horizontal space
-  | LetterCat         -- ^ 11: Letter
-  | OtherCat          -- ^ 12: Other character
-  | ActiveCat         -- ^ 13: Active character
-  | CommentPrefixCat  -- ^ 14: Comment Prefix
-  | InvalidCat        -- ^ 15: Invalid character
-  | UnknownCat        -- ^     Unknown character
-  deriving (Eq, Ord, Show)
-
--- | A map that assigns a character a category code. Any character not contained
--- in that map is supposed to throw an "unknown character" error during lexing.
-type CatCodeMap = Map Char CatCode
-
--- | Checks whether a character is an escape character wrt. a given category
--- code mapping (default: @\\@).
-isEscapeChar :: CatCodeMap -> Char -> Bool
-isEscapeChar catCodeMap c =
-  Map.lookup c catCodeMap == Just EscapeCharCat
-
--- | Checks whether a character is a begin group character wrt. a given
--- category code mapping (default: @{@).
-isBeginGroupChar :: CatCodeMap -> Char -> Bool
-isBeginGroupChar catCodeMap c =
-  Map.lookup c catCodeMap == Just BeginGroupCat
-
--- | Checks whether a character is an end group character wrt. a given category
--- code mapping (default: @}@).
-isEndGroupChar :: CatCodeMap -> Char -> Bool
-isEndGroupChar catCodeMap c =
-  Map.lookup c catCodeMap == Just EndGroupCat
-
--- | Checks whether a character is a math shift character wrt. a given category
--- code mapping (default: @$@).
-isMathShiftChar :: CatCodeMap -> Char -> Bool
-isMathShiftChar catCodeMap c =
-  Map.lookup c catCodeMap == Just MathShiftCat
-
--- | Checks whether a character is an alignment tab wrt. a given category code
--- mapping (default: @&@).
-isAlignTab :: CatCodeMap -> Char -> Bool
-isAlignTab catCodeMap c =
-  Map.lookup c catCodeMap == Just AlignTabCat
-
--- | Checks whether a character is a line break character wrt. a given category
--- code mapping (default: @\\r@).
-isEndOfLine :: CatCodeMap -> Char -> Bool
-isEndOfLine catCodeMap c =
-  Map.lookup c catCodeMap == Just EndOfLineCat
-
--- | Checks whether a character is a parameter character wrt. a given category
--- code mapping (default: @#@).
-isParamChar :: CatCodeMap -> Char -> Bool
-isParamChar catCodeMap c =
-  Map.lookup c catCodeMap == Just ParamCharCat
-
--- | Checks whether a character is a superscript character wrt. a given
--- category code mapping (default: @^@).
-isSuperscriptChar :: CatCodeMap -> Char -> Bool
-isSuperscriptChar catCodeMap c =
-  Map.lookup c catCodeMap == Just SuperscriptCat
-
--- | Checks whether a character is a subscript character wrt. a given category
--- code mapping (default: @_@).
-isSubscriptChar :: CatCodeMap -> Char -> Bool
-isSubscriptChar catCodeMap c =
-  Map.lookup c catCodeMap == Just SubscriptCat
-
--- | Checks whether a character is an ignored character wrt. a given category
--- code mapping (default: @\\NUL@).
-isIgnoredChar :: CatCodeMap -> Char -> Bool
-isIgnoredChar catCodeMap c =
-  Map.lookup c catCodeMap == Just IgnoredCat
-
--- | Checks whether a character is a space wrt. a given category code mapping
--- (default: @ @).
-isSpace :: CatCodeMap -> Char -> Bool
-isSpace catCodeMap c =
-  Map.lookup c catCodeMap == Just SpaceCat
-
--- | Checks whether a character is a letter wrt. a given category code mapping
--- (default: any ASCII letter).
-isLetter :: CatCodeMap -> Char -> Bool
-isLetter catCodeMap c =
-  Map.lookup c catCodeMap == Just LetterCat
-
--- | Checks whether a character is an other character wrt. a given category
--- code mapping (default: any ASCII characterthat is not part of any other
--- character category).
-isOtherChar :: CatCodeMap -> Char -> Bool
-isOtherChar catCodeMap c =
-  Map.lookup c catCodeMap == Just OtherCat
-
--- | Checks whether a character is an active character wrt. a given category
--- code mapping (default: @~@).
-isActiveChar :: CatCodeMap -> Char -> Bool
-isActiveChar catCodeMap c =
-  Map.lookup c catCodeMap == Just ActiveCat
-
--- | Checks whether a character is a comment prefix wrt. a given category code
--- mapping (default: @%@).
-isCommentPrefix :: CatCodeMap -> Char -> Bool
-isCommentPrefix catCodeMap c =
-  Map.lookup c catCodeMap == Just CommentPrefixCat
-
--- | Checks whether a character is an invalid character wrt. a given category
--- code mapping (default: @\\DEL@).
-isInvalidChar :: CatCodeMap -> Char -> Bool
-isInvalidChar catCodeMap c =
-     Map.lookup c catCodeMap == Just InvalidCat
-
--- | Checks whether a character is an invalid character wrt. a given category
--- code mapping (default: any non-ASCII character).
-isUnknownChar :: CatCodeMap -> Char -> Bool
-isUnknownChar catCodeMap c = isNothing (Map.lookup c catCodeMap)
-
--- | Default category code mapping for TeX documents.
-defaultCatCodes :: Mode -> CatCodeMap
-defaultCatCodes mode = Map.fromAscList [(c, defCatCode mode c) | c <- allowedChars]
-
--- | The default category code of a character, where a character is regarded
--- as an element of @['\x0000' .. '\x00FF']@.
-defCatCode :: Mode -> Char -> CatCode
--- @TexMode@:
-defCatCode TexMode '\\' = EscapeCharCat
-defCatCode TexMode '{' = BeginGroupCat
-defCatCode TexMode '}' = EndGroupCat
-defCatCode TexMode '$' = MathShiftCat
-defCatCode TexMode '&' = AlignTabCat
-defCatCode TexMode '\r' = EndOfLineCat
-defCatCode TexMode '#' = ParamCharCat
-defCatCode TexMode '^' = SuperscriptCat
-defCatCode TexMode '_' = SubscriptCat
-defCatCode TexMode ' ' = SpaceCat
-defCatCode TexMode c | c `elem` ['A' .. 'Z'] = LetterCat
-defCatCode TexMode c | c `elem` ['a' .. 'z'] = LetterCat
-defCatCode TexMode '~' = ActiveCat
-defCatCode TexMode '%' = CommentPrefixCat
-defCatCode TexMode '\NUL' = IgnoredCat
-defCatCode TexMode '\DEL' = InvalidCat
-defCatCode TexMode _ = OtherCat
--- @FtlTexMode@:
-defCatCode FtlTexMode '\\' = EscapeCharCat
-defCatCode FtlTexMode '{' = BeginGroupCat
-defCatCode FtlTexMode '}' = EndGroupCat
-defCatCode FtlTexMode '$' = MathShiftCat
-defCatCode FtlTexMode '&' = AlignTabCat
-defCatCode FtlTexMode '\r' = EndOfLineCat
-defCatCode FtlTexMode '#' = ParamCharCat
-defCatCode FtlTexMode '^' = SuperscriptCat
-defCatCode FtlTexMode '_' = SubscriptCat
-defCatCode FtlTexMode '\t' = SpaceCat
-defCatCode FtlTexMode ' ' = SpaceCat
-defCatCode FtlTexMode c | c `elem` ['A' .. 'Z'] = LetterCat
-defCatCode FtlTexMode c | c `elem` ['a' .. 'z'] = LetterCat
-defCatCode FtlTexMode '~' = ActiveCat
-defCatCode FtlTexMode '%' = CommentPrefixCat
-defCatCode FtlTexMode '\NUL' = InvalidCat
-defCatCode FtlTexMode _ = OtherCat
-
-
--- * Lexemes
-
--- | TeX lexemes: TeX tokens (with additional source text and source position
--- information) plus two additional constructors for skipped characters and
--- comments.
-data (Pos p) => Lexeme p =
-    Character{
-      charContent :: Char,
-      charCatCode :: CatCode,
-      sourceText :: Text,
-      sourcePos :: p
-    } -- ^ Character token
-  | ControlWord{
-      ctrlWordContent :: Text,
-      sourceText :: Text,
-      sourcePos :: p
-    } -- ^ Control word
-  | ControlSymbol{
-      ctrlSymbolContent :: Char,
-      sourceText :: Text,
-      sourcePos :: p
-    } -- ^ Control symbol
-  | ControlSpace{
-      sourceText :: Text,
-      sourcePos :: p
-    } -- ^ Control space
-  | Parameter{
-      paramNumber :: Int,
-      sourceText :: Text,
-      sourcePos :: p
-    } -- ^ Parameter token
-  | Skipped{
-      sourceText :: Text,
-      sourcePos :: p
-    } -- ^ Skipped characters
-  | Comment{
-      commentContent :: Text,
-      sourceText :: Text,
-      sourcePos :: p
-    } -- ^ Comment
-  | IsabelleSymbol{
-      isabelleSymbolContent :: Text,
-      sourceText :: Text,
-      sourcePos :: p
-    } -- ^ "Isabelle symbol"
-  deriving (Eq, Ord, Show)
-
-isCharacterLexeme :: (Pos p) => Lexeme p -> Bool
-isCharacterLexeme Character{} = True
-isCharacterLexeme _ = False
-
-isControlWordLexeme :: (Pos p) => Lexeme p -> Bool
-isControlWordLexeme ControlWord{} = True
-isControlWordLexeme _ = False
-
-isControlSymbolLexeme :: (Pos p) => Lexeme p -> Bool
-isControlSymbolLexeme ControlSymbol{} = True
-isControlSymbolLexeme _ = False
-
-isControlSpaceLexeme :: (Pos p) => Lexeme p -> Bool
-isControlSpaceLexeme ControlSpace{} = True
-isControlSpaceLexeme _ = False
-
-isParameterLexeme :: (Pos p) => Lexeme p -> Bool
-isParameterLexeme Parameter{} = True
-isParameterLexeme _ = False
-
-isSkippedLexeme :: (Pos p) => Lexeme p -> Bool
-isSkippedLexeme Skipped{} = True
-isSkippedLexeme _ = False
-
-isCommentLexeme :: (Pos p) => Lexeme p -> Bool
-isCommentLexeme Comment{} = True
-isCommentLexeme _ = False
-
-isEscapeCharLexeme :: (Pos p) => Lexeme p -> Bool
-isEscapeCharLexeme Character{charCatCode = catCode}
-  | catCode == EscapeCharCat = True
-isEscapeCharLexeme _ = False
-
-isBeginGroupCharLexeme :: (Pos p) => Lexeme p -> Bool
-isBeginGroupCharLexeme Character{charCatCode = catCode}
-  | catCode == BeginGroupCat = True
-isBeginGroupCharLexeme _ = False
-
-isEndGroupCharLexeme :: (Pos p) => Lexeme p -> Bool
-isEndGroupCharLexeme Character{charCatCode = catCode}
-  | catCode == EndGroupCat = True
-isEndGroupCharLexeme _ = False
-
-isMathShiftCharLexeme :: (Pos p) => Lexeme p -> Bool
-isMathShiftCharLexeme Character{charCatCode = catCode}
-  | catCode == MathShiftCat = True
-isMathShiftCharLexeme _ = False
-
-isAlignTabCharLexeme :: (Pos p) => Lexeme p -> Bool
-isAlignTabCharLexeme Character{charCatCode = catCode}
-  | catCode == AlignTabCat = True
-isAlignTabCharLexeme _ = False
-
-isEndOfLineCharLexeme :: (Pos p) => Lexeme p -> Bool
-isEndOfLineCharLexeme Character{charCatCode = catCode}
-  | catCode == EndOfLineCat = True
-isEndOfLineCharLexeme _ = False
-
-isParamCharLexeme :: (Pos p) => Lexeme p -> Bool
-isParamCharLexeme Character{charCatCode = catCode}
-  | catCode == ParamCharCat = True
-isParamCharLexeme _ = False
-
-isSuperscriptCharLexeme :: (Pos p) => Lexeme p -> Bool
-isSuperscriptCharLexeme Character{charCatCode = catCode}
-  | catCode == SuperscriptCat = True
-isSuperscriptCharLexeme _ = False
-
-isSubscriptCharLexeme :: (Pos p) => Lexeme p -> Bool
-isSubscriptCharLexeme Character{charCatCode = catCode}
-  | catCode == SubscriptCat = True
-isSubscriptCharLexeme _ = False
-
-isIgnoredCharLexeme :: (Pos p) => Lexeme p -> Bool
-isIgnoredCharLexeme Character{charCatCode = catCode}
-  | catCode == IgnoredCat = True
-isIgnoredCharLexeme _ = False
-
-isSpaceCharLexeme :: (Pos p) => Lexeme p -> Bool
-isSpaceCharLexeme Character{charCatCode = catCode}
-  | catCode == SpaceCat = True
-isSpaceCharLexeme _ = False
-
-isLetterCharLexeme :: (Pos p) => Lexeme p -> Bool
-isLetterCharLexeme Character{charCatCode = catCode}
-  | catCode == LetterCat = True
-isLetterCharLexeme _ = False
-
-isOtherCharLexeme :: (Pos p) => Lexeme p -> Bool
-isOtherCharLexeme Character{charCatCode = catCode}
-  | catCode == OtherCat = True
-isOtherCharLexeme _ = False
-
-isActiveCharLexeme :: (Pos p) => Lexeme p -> Bool
-isActiveCharLexeme Character{charCatCode = catCode}
-  | catCode == ActiveCat = True
-isActiveCharLexeme _ = False
-
-isCommentPrefixCharLexeme :: (Pos p) => Lexeme p -> Bool
-isCommentPrefixCharLexeme Character{charCatCode = catCode}
-  | catCode == CommentPrefixCat = True
-isCommentPrefixCharLexeme _ = False
-
-isInvalidCharLexeme :: (Pos p) => Lexeme p -> Bool
-isInvalidCharLexeme Character{charCatCode = catCode}
-  | catCode == InvalidCat = True
-isInvalidCharLexeme _ = False
-
-isIsabelleSymbolLexeme :: (Pos p) => Lexeme p -> Bool
-isIsabelleSymbolLexeme IsabelleSymbol{} = True
-isIsabelleSymbolLexeme _ = False
 
 
 -- * Errors
@@ -409,7 +33,6 @@ isIsabelleSymbolLexeme _ = False
 data (Pos p) => LexingError p =
     InvalidChar Char p
   | UnknownChar Char p
-  | InvalidIsabelleSymbol Text p
   deriving (Eq, Ord)
 
 -- | Turn an error into a located error 
@@ -419,10 +42,8 @@ makeErrMsg (InvalidChar char pos) =
   in (msg, pos)
 makeErrMsg (UnknownChar char pos) =
   let msg = "Unknown character " <> codePoint char <> ".\n" <>
-            "Only characters from the Unicode blocks \"Basic Latin\" and \"Latin-1 Supplement\" are allowed."
-  in (msg, pos)
-makeErrMsg (InvalidIsabelleSymbol text pos) =
-  let msg = "Invalid Isabelle symbol " <> text <> "."
+            "Only characters from the Unicode blocks \"Basic Latin\" and " <>
+            "\"Latin-1 Supplement\", and Isabelle symbols are allowed."
   in (msg, pos)
 
 
@@ -440,8 +61,6 @@ data InputState =
 
 -- | The current lexing state.
 data (Pos p) => LexingState p = LexingState{
-    mode :: Mode,
-    -- ^ The mode in which the parser is executed
     position :: p,
     -- ^ Current position
     catCodes :: CatCodeMap,
@@ -452,26 +71,21 @@ data (Pos p) => LexingState p = LexingState{
     -- ^ Current value of @\\endlinechar@
   }
 
--- | The initial lexing state.
-initState :: (Pos p) => Mode -> p -> LexingState p
-initState mode pos = LexingState{
-    mode = mode,
-    position = pos,
-    catCodes = defaultCatCodes mode,
-    inputState = NewLine,
-    endlineChar = Just '\r'
-  }
-
 
 -- * Running a Lexer
 
 runLexer :: (Msg p m)
          => p             -- ^ Initial position
          -> Text          -- ^ Input text
-         -> LexingState p -- ^ Lexing state
          -> m [Lexeme p]
-runLexer pos input state =
-  let lines = Base.splitText input
+runLexer pos input =
+  let state = LexingState{
+        position = pos,
+        catCodes = defaultCatCodes,
+        inputState = NewLine,
+        endlineChar = Just '\r'
+      }
+      lines = Base.splitText input
   in runLexer' pos lines state
   where
     runLexer' pos (MiddleLine line lineBreak rest) state = do
@@ -577,11 +191,7 @@ texLine = do
 -- ** Control Sequences
 
 controlSequence :: (Pos p) => TexLexer [Lexeme p] p
-controlSequence = do
-  mode <- gets mode
-  case mode of
-    TexMode -> try controlWord <|> try controlSymbol <|> try controlSpace <|> controlSpace'
-    FtlTexMode -> try controlWord <|> try isabelleSymbol <|> try controlSymbol <|> try controlSpace <|> controlSpace'
+controlSequence = try controlWord <|> try controlSymbol <|> try controlSpace <|> controlSpace'
 
 controlWord :: (Pos p) => TexLexer [Lexeme p] p
 controlWord = do
@@ -893,28 +503,6 @@ comment = do
       inputState = SkippingSpaces
     }
   return [commentLexeme]--, skippedLineBreak]
-
-isabelleSymbol :: (Pos p) => TexLexer [Lexeme p] p
-isabelleSymbol = do
-  state <- get
-  cats <- gets catCodes
-  let pos = position state
-  (escapeChar, escapeCharSourceText) <- satisfy' $ isEscapeChar cats
-  (lessChar, lessCharSourceText) <- satisfy' (== '<')
-  (identifier, identifierSourceText) <- satisfySome' (\c -> c == '^' || isLetter cats c)
-  (greaterChar, greaterCharSourceText) <- satisfy' (== '>')
-  let sourceText = escapeCharSourceText <> lessCharSourceText <> identifierSourceText <> greaterCharSourceText
-      newPos = getNextPos sourceText pos
-      isabelleSymbolPos = getPosOf sourceText pos
-  put state{
-      position = newPos,
-      inputState = MiddleOfLine
-    }
-  return $ singleton IsabelleSymbol{
-      isabelleSymbolContent = identifier,
-      sourceText = sourceText,
-      sourcePos = isabelleSymbolPos
-  }
 
 
 -- ** Ignored Characters

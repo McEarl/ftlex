@@ -1,5 +1,5 @@
 name: ftlex
-version: 0.6.0
+version: 0.7.0
 cabal-version: >= 1.10
 build-type: Simple
 license: LGPL-3
@@ -30,13 +30,17 @@ source-repository head
 library
   hs-source-dirs: src
   exposed-modules:
-    FTLex.Base
-    FTLex.Debug
-    FTLex.Ftl
+    FTLex.Lexer.FTL.Lexemes
+    FTLex.Lexer.FTL.Lexer
+    FTLex.Lexer.FTLTEX.Lexer
+    FTLex.Lexer.TEX.Lexemes
     FTLex.Message
     FTLex.Position
-    FTLex.Tex
   other-modules:
+    FTLex.Lexer.FTL.Characters
+    FTLex.Lexer.FTLTEX.Characters
+    FTLex.Lexer.TEX.Characters
+    FTLex.Lexer.Base
     FTLex.Error
     FTLex.Helpers
   build-depends:

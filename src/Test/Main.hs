@@ -1,18 +1,17 @@
 module Main where
 
-import Prelude hiding (putStrLn, getLine)
+import Prelude hiding (getLine)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (openFile, IOMode(..), hClose, hFlush, stdout)
 import System.Environment (getArgs)
 import System.FilePath
-import Data.Text.IO (putStrLn, getLine, hGetContents)
+import Data.Text.IO ( getLine, hGetContents)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import FTLex.Ftl qualified as FTL
-import FTLex.Tex qualified as TEX
+import FTLex.Lexer.FTL.Lexer qualified as FTL
+import FTLex.Lexer.FTLTEX.Lexer qualified as FTLTEX
 import FTLex.Position
 import FTLex.Message
-import FTLex.Debug
 
 
 main :: IO ()
@@ -25,12 +24,11 @@ main = do
   input <- hGetContents inputH
   hClose inputH
   debugOutput <- case splitExtensions fileArg of
-    (_, ".ftl") -> showFtlLexemes <$> FTL.runLexer initPos input (FTL.initState initPos)
-    (_, ".ftl.tex") -> showTexLexemes <$> TEX.runLexer initPos input (TEX.initState TEX.FtlTexMode initPos)
-    (_, ".tex") -> showTexLexemes <$> TEX.runLexer initPos input (TEX.initState TEX.TexMode initPos)
+    (_, ".ftl") -> show <$> FTL.runLexer initPos input
+    (_, ".ftl.tex") -> show <$> FTLTEX.runLexer initPos input
     (_, ext) -> failWith $
-      "\nInvalid file name extension \"" <> Text.pack ext <> "\". " <>
-      "Only \".ftl\", \".ftl.tex\" and \".tex\" are allowed.\n" <>
+      "\nInvalid file name extension \"" ++ ext ++ "\". " ++
+      "Only \".ftl\" and \".ftl.tex\" are allowed.\n" ++
       usageInfo
   putStrLn $ "\n" <> debugOutput
   putStr "\nIs the above output correct? (y/n) "
@@ -44,15 +42,15 @@ main = do
   where
     initPos = SimplePosition 1 1
 
-usageInfo :: Text
+usageInfo :: String
 usageInfo =
   "Usage: cabal test --test-options=\"<path to (.ftl|.ftl.tex|.tex) file>\"\n"
 
-failWith :: Text -> IO a
+failWith :: String -> IO a
 failWith msg = putStrLn msg >> hFlush stdout >> exitFailure
 
-succeedWith :: Text -> IO a
-succeedWith msg = putStrLn msg>> hFlush stdout >> exitSuccess
+succeedWith :: String -> IO a
+succeedWith msg = putStrLn msg >> hFlush stdout >> exitSuccess
 
 
 -- * Message
@@ -60,7 +58,7 @@ succeedWith msg = putStrLn msg>> hFlush stdout >> exitSuccess
 instance Msg SimplePosition IO where
   errorLexer :: SimplePosition -> Text -> IO a
   errorLexer pos msg = do
-    putStrLn $ "Lexing error " <> showPos pos <> ": " <> msg
+    putStrLn $ "Lexing error " ++ show pos ++ ": " ++ Text.unpack msg
     putStrLn "\nIs the above error intended? (y/n) "
     answer <- getLine
     case answer of

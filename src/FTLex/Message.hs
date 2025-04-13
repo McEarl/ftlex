@@ -1,6 +1,6 @@
 -- |
 -- Module      : FTLex.Message
--- Copyright   : (c) 2024, Marcel Schütz
+-- Copyright   : (c) 2024-2025, Marcel Schütz
 -- License     : LGPL-3
 -- Maintainer  : marcel.schuetz@fau.de
 --
